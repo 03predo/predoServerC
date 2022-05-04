@@ -383,7 +383,7 @@ static void httpd_delete(struct httpd_data *hd)
     free(hd);
 }
 
-esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
+esp_err_t httpd_start(httpd_handle_t *handle, const httpd_config_t *config)
 {
     if (handle == NULL || config == NULL) {
         return ESP_ERR_INVALID_ARG;
