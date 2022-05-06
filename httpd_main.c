@@ -325,50 +325,6 @@ static esp_err_t httpd_server_init(struct httpd_data *hd)
     return ESP_OK;
 }
 
-static struct httpd_data *httpd_create(const httpd_config_t *config)
-{
-    /* Allocate memory for httpd instance data */
-    struct httpd_data *hd = calloc(1, sizeof(struct httpd_data));
-    if (!hd) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP server instance"));
-        return NULL;
-    }
-    hd->hd_calls = calloc(config->max_uri_handlers, sizeof(httpd_uri_t *));
-    if (!hd->hd_calls) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP URI handlers"));
-        free(hd);
-        return NULL;
-    }
-    hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
-    if (!hd->hd_sd) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP session data"));
-        free(hd->hd_calls);
-        free(hd);
-        return NULL;
-    }
-    struct httpd_req_aux *ra = &hd->hd_req_aux;
-    ra->resp_hdrs = calloc(config->max_resp_headers, sizeof(struct resp_hdr));
-    if (!ra->resp_hdrs) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP response headers"));
-        free(hd->hd_sd);
-        free(hd->hd_calls);
-        free(hd);
-        return NULL;
-    }
-    hd->err_handler_fns = calloc(HTTPD_ERR_CODE_MAX, sizeof(httpd_err_handler_func_t));
-    if (!hd->err_handler_fns) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP error handlers"));
-        free(ra->resp_hdrs);
-        free(hd->hd_sd);
-        free(hd->hd_calls);
-        free(hd);
-        return NULL;
-    }
-    /* Save the configuration for this instance */
-    hd->config = *config;
-    return hd;
-}
-
 static void httpd_delete(struct httpd_data *hd)
 {
     struct httpd_req_aux *ra = &hd->hd_req_aux;
