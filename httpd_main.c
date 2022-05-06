@@ -388,7 +388,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     if (handle == NULL || config == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    //this is a comment to test github
+
     /* Sanity check about whether LWIP is configured for providing the
      * maximum number of open sockets sufficient for the server. Though,
      * this check doesn't guarantee that many sockets will actually be
@@ -406,11 +406,45 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         return ESP_ERR_INVALID_ARG;
     }
 
-    struct httpd_data *hd = httpd_create(config);
-    if (hd == NULL) {
-        /* Failed to allocate memory */
+    /* Allocate memory for httpd instance data */
+    struct httpd_data *hd = calloc(1, sizeof(struct httpd_data));
+    if (!hd) {
+        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP server instance"));
         return ESP_ERR_HTTPD_ALLOC_MEM;
     }
+    hd->hd_calls = calloc(config->max_uri_handlers, sizeof(httpd_uri_t *));
+    if (!hd->hd_calls) {
+        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP URI handlers"));
+        free(hd);
+        return ESP_ERR_HTTPD_ALLOC_MEM;
+    }
+    hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
+    if (!hd->hd_sd) {
+        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP session data"));
+        free(hd->hd_calls);
+        free(hd);
+        return ESP_ERR_HTTPD_ALLOC_MEM;
+    }
+    struct httpd_req_aux *ra = &hd->hd_req_aux;
+    ra->resp_hdrs = calloc(config->max_resp_headers, sizeof(struct resp_hdr));
+    if (!ra->resp_hdrs) {
+        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP response headers"));
+        free(hd->hd_sd);
+        free(hd->hd_calls);
+        free(hd);
+        return ESP_ERR_HTTPD_ALLOC_MEM;
+    }
+    hd->err_handler_fns = calloc(HTTPD_ERR_CODE_MAX, sizeof(httpd_err_handler_func_t));
+    if (!hd->err_handler_fns) {
+        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP error handlers"));
+        free(ra->resp_hdrs);
+        free(hd->hd_sd);
+        free(hd->hd_calls);
+        free(hd);
+        return ESP_ERR_HTTPD_ALLOC_MEM;
+    }
+    /* Save the configuration for this instance */
+    hd->config = *config;
 
     if (httpd_server_init(hd) != ESP_OK) {
         httpd_delete(hd);
