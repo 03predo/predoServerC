@@ -349,28 +349,26 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         ESP_LOGW(TAG, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
     }
 
+    bool sock_err = false
     int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
     if (ret < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
         close(fd);
-        httpd_delete(hd);
-        return ESP_FAIL;
+        sock_err = true;
     }
 
     ret = listen(fd, hd->config.backlog_conn);
     if (ret < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in listen (%d)"), errno);
         close(fd);
-        httpd_delete(hd);
-        return ESP_FAIL;
+        sock_err = true;
     }
 
     int ctrl_fd = cs_create_ctrl_sock(hd->config.ctrl_port);
     if (ctrl_fd < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in creating ctrl socket (%d)"), errno);
         close(fd);
-        httpd_delete(hd);
-        return ESP_FAIL;
+        sock_err = true;
     }
 
     int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -378,6 +376,10 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);
         close(fd);
         close(ctrl_fd);
+        sock_err = true;
+    }
+    
+    if(sock_err){
         httpd_delete(hd);
         return ESP_FAIL;
     }
