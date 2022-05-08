@@ -210,6 +210,15 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         return ESP_OK;
     }
 
+    /* Case0: Do we have a control message? */
+    if (FD_ISSET(hd->ctrl_fd, &read_set)) {
+        ESP_LOGD(TAG, LOG_FMT("processing ctrl message"));
+        httpd_process_ctrl_msg(hd);
+        if (hd->hd_td.status == THREAD_STOPPING) {
+            ESP_LOGD(TAG, LOG_FMT("stopping thread"));
+            return ESP_FAIL;
+        }
+    }
 
     /* Case1: Do we have any activity on the current data
      * sessions? */
