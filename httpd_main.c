@@ -210,6 +210,15 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         return ESP_OK;
     }
 
+    /* Case0: Do we have a control message? */
+    if (FD_ISSET(hd->ctrl_fd, &read_set)) {
+        ESP_LOGD(TAG, LOG_FMT("processing ctrl message"));
+        httpd_process_ctrl_msg(hd);
+        if (hd->hd_td.status == THREAD_STOPPING) {
+            ESP_LOGD(TAG, LOG_FMT("stopping thread"));
+            return ESP_FAIL;
+        }
+    }
 
     /* Case1: Do we have any activity on the current data
      * sessions? */
@@ -355,7 +364,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP server instance"));
         return ESP_ERR_HTTPD_ALLOC_MEM;
     }
-    
+
     hd->hd_calls = calloc(config->max_uri_handlers, sizeof(httpd_uri_t *));
     hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
     struct httpd_req_aux *ra = &hd->hd_req_aux;
