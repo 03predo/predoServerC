@@ -18,8 +18,8 @@
 #ifndef WIFI_H
 #define WIFI_H
 
-#define WIFI_SSID           "ROLSTON"
-#define WIFI_PASS           "rolston11"
+#define WIFI_SSID           "BELL533"
+#define WIFI_PASS           "23F5274A"
 #define MAXIMUM_RETRY       5
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
