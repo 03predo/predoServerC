@@ -20,9 +20,9 @@ static httpd_uri_t predoServer = {
 };
 
 void app_main(void){
+    esp_log_level_set("main", ESP_LOG_DEBUG);
     esp_log_level_set("httpd", ESP_LOG_DEBUG);
     esp_log_level_set("httpd_sess", ESP_LOG_DEBUG);
-    //esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
     esp_log_level_set("httpd_uri", ESP_LOG_DEBUG);
 
     esp_err_t ret = nvs_flash_init();
@@ -113,5 +113,11 @@ void app_main(void){
         return;
     }
     
+    for(int k = 10; k > 0; --k){
+        ESP_LOGD(TAG, "Stopping in %d seconds", k);
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+    
+    httpd_stop(server);
     return ;
 }

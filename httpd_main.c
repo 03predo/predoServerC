@@ -263,7 +263,7 @@ static void httpd_thread(void *arg)
     httpd_os_thread_delete();
 }
 
-static void httpd_delete(struct httpd_data *hd)
+static void HttpDelete(struct httpd_data *hd)
 {
     struct httpd_req_aux *ra = &hd->hd_req_aux;
     /* Free memory of httpd instance data */
@@ -359,7 +359,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         ESP_LOGW(TAG, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
     }
 
-    bool sock_err = false
+    bool sock_err = false;
     int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
     if (ret < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
@@ -390,7 +390,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     }
     
     if(sock_err){
-        httpd_delete(hd);
+        HttpDelete(hd);
         return ESP_FAIL;
     }
 
@@ -401,7 +401,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     httpd_sess_init(hd);
     if (httpd_os_thread_create(&hd->hd_td.handle, "httpd", hd->config.stack_size, hd->config.task_priority, httpd_thread, hd, hd->config.core_id) != ESP_OK) {
         /* Failed to launch task */
-        httpd_delete(hd);
+        HttpDelete(hd);
         return ESP_ERR_HTTPD_TASK;
     }
 
@@ -450,7 +450,7 @@ esp_err_t httpd_stop(httpd_handle_t handle)
         hd->config.global_transport_ctx = NULL;
     }
 
-    ESP_LOGD(TAG, LOG_FMT("server stopped"));
-    httpd_delete(hd);
+    HttpDelete(hd);
+    ESP_LOGI(TAG, LOG_FMT("Server Stopped"));
     return ESP_OK;
 }
