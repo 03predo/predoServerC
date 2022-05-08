@@ -272,7 +272,17 @@ static void httpd_delete(struct httpd_data *hd)
     free(hd->hd_sd);
 
     /* Free registered URI handlers */
-    httpd_unregister_all_uri_handlers(hd);
+    for (unsigned i = 0; i < hd->config.max_uri_handlers; i++) {
+        if (!hd->hd_calls[i]) {
+            break;
+        }
+        ESP_LOGD(TAG, LOG_FMT("[%d] removing %s"), i, hd->hd_calls[i]->uri);
+
+        free((char*)hd->hd_calls[i]->uri);
+        free(hd->hd_calls[i]);
+        hd->hd_calls[i] = NULL;
+    }
+
     free(hd->hd_calls);
     free(hd);
 }
