@@ -263,64 +263,6 @@ static void httpd_thread(void *arg)
     httpd_os_thread_delete();
 }
 
-static esp_err_t httpd_server_init(struct httpd_data *hd)
-{
-    int fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in socket (%d)"), errno);
-        return ESP_FAIL;
-    }
-    struct sockaddr_in serv_addr = {
-        .sin_family   = PF_INET,
-        .sin_addr     = {
-            .s_addr = htonl(INADDR_ANY)
-        },
-        .sin_port     = htons(hd->config.server_port)
-    };
-    /* Enable SO_REUSEADDR to allow binding to the same
-     * address and port when restarting the server */
-    int enable = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
-        /* This will fail if CONFIG_LWIP_SO_REUSE is not enabled. But
-         * it does not affect the normal working of the HTTP Server */
-        ESP_LOGW(TAG, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
-    }
-
-    int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-    if (ret < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
-        close(fd);
-        return ESP_FAIL;
-    }
-
-    ret = listen(fd, hd->config.backlog_conn);
-    if (ret < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in listen (%d)"), errno);
-        close(fd);
-        return ESP_FAIL;
-    }
-
-    int ctrl_fd = cs_create_ctrl_sock(hd->config.ctrl_port);
-    if (ctrl_fd < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in creating ctrl socket (%d)"), errno);
-        close(fd);
-        return ESP_FAIL;
-    }
-
-    int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (msg_fd < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);
-        close(fd);
-        close(ctrl_fd);
-        return ESP_FAIL;
-    }
-
-    hd->listen_fd = fd;
-    hd->ctrl_fd = ctrl_fd;
-    hd->msg_fd  = msg_fd;
-    return ESP_OK;
-}
-
 static void httpd_delete(struct httpd_data *hd)
 {
     struct httpd_req_aux *ra = &hd->hd_req_aux;
@@ -386,17 +328,66 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     /* Save the configuration for this instance */
     hd->config = *config;
 
-    if (httpd_server_init(hd) != ESP_OK) {
+    int fd = socket(PF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in socket (%d)"), errno);
+        return ESP_FAIL;
+    }
+    struct sockaddr_in serv_addr = {
+        .sin_family   = PF_INET,
+        .sin_addr     = {
+            .s_addr = htonl(INADDR_ANY)
+        },
+        .sin_port     = htons(hd->config.server_port)
+    };
+    /* Enable SO_REUSEADDR to allow binding to the same
+     * address and port when restarting the server */
+    int enable = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
+        /* This will fail if CONFIG_LWIP_SO_REUSE is not enabled. But
+         * it does not affect the normal working of the HTTP Server */
+        ESP_LOGW(TAG, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
+    }
+
+    int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    if (ret < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
+        close(fd);
         httpd_delete(hd);
         return ESP_FAIL;
     }
 
+    ret = listen(fd, hd->config.backlog_conn);
+    if (ret < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in listen (%d)"), errno);
+        close(fd);
+        httpd_delete(hd);
+        return ESP_FAIL;
+    }
+
+    int ctrl_fd = cs_create_ctrl_sock(hd->config.ctrl_port);
+    if (ctrl_fd < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in creating ctrl socket (%d)"), errno);
+        close(fd);
+        httpd_delete(hd);
+        return ESP_FAIL;
+    }
+
+    int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (msg_fd < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);
+        close(fd);
+        close(ctrl_fd);
+        httpd_delete(hd);
+        return ESP_FAIL;
+    }
+
+    hd->listen_fd = fd;
+    hd->ctrl_fd = ctrl_fd;
+    hd->msg_fd  = msg_fd;
+
     httpd_sess_init(hd);
-    if (httpd_os_thread_create(&hd->hd_td.handle, "httpd",
-                               hd->config.stack_size,
-                               hd->config.task_priority,
-                               httpd_thread, hd,
-                               hd->config.core_id) != ESP_OK) {
+    if (httpd_os_thread_create(&hd->hd_td.handle, "httpd", hd->config.stack_size, hd->config.task_priority, httpd_thread, hd, hd->config.core_id) != ESP_OK) {
         /* Failed to launch task */
         httpd_delete(hd);
         return ESP_ERR_HTTPD_TASK;
