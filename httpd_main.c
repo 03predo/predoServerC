@@ -398,7 +398,16 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     hd->ctrl_fd = ctrl_fd;
     hd->msg_fd  = msg_fd;
 
-    httpd_sess_init(hd);
+    if((!hd) || (!hd->hd_sd) || (!hd->config.max_open_sockets)) {
+        return;
+    }
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while(current <= end){
+        current->fd = -1;
+        current->ctx = NULL;
+        current++;
+    }
     if (httpd_os_thread_create(&hd->hd_td.handle, "httpd", hd->config.stack_size, hd->config.task_priority, httpd_thread, hd, hd->config.core_id) != ESP_OK) {
         /* Failed to launch task */
         HttpDelete(hd);

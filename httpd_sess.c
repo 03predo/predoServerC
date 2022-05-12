@@ -379,10 +379,17 @@ void httpd_sess_delete(struct httpd_data *hd, struct sock_db *session)
 
 void httpd_sess_init(struct httpd_data *hd)
 {
-    enum_context_t context = {
-        .task = HTTPD_TASK_INIT
-    };
-    httpd_sess_enum(hd, enum_function, &context);
+    if((!hd) || (!hd->hd_sd) || (!hd->config.max_open_sockets)) {
+        return;
+    }
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while(current <= end){
+        current->fd = -1;
+        current->ctx = NULL;
+        current++;
+    }
+
 }
 
 bool httpd_sess_pending(struct httpd_data *hd, struct sock_db *session)
