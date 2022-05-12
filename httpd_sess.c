@@ -377,14 +377,6 @@ void httpd_sess_delete(struct httpd_data *hd, struct sock_db *session)
     }
 }
 
-void httpd_sess_init(struct httpd_data *hd)
-{
-    enum_context_t context = {
-        .task = HTTPD_TASK_INIT
-    };
-    httpd_sess_enum(hd, enum_function, &context);
-}
-
 bool httpd_sess_pending(struct httpd_data *hd, struct sock_db *session)
 {
     if (!session) {

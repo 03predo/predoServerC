@@ -263,122 +263,7 @@ static void httpd_thread(void *arg)
     httpd_os_thread_delete();
 }
 
-static esp_err_t httpd_server_init(struct httpd_data *hd)
-{
-#if CONFIG_LWIP_IPV6
-    int fd = socket(PF_INET6, SOCK_STREAM, 0);
-#else
-    int fd = socket(PF_INET, SOCK_STREAM, 0);
-#endif
-    if (fd < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in socket (%d)"), errno);
-        return ESP_FAIL;
-    }
-#if CONFIG_LWIP_IPV6
-    struct in6_addr inaddr_any = IN6ADDR_ANY_INIT;
-    struct sockaddr_in6 serv_addr = {
-        .sin6_family  = PF_INET6,
-        .sin6_addr    = inaddr_any,
-        .sin6_port    = htons(hd->config.server_port)
-    };
-#else
-    struct sockaddr_in serv_addr = {
-        .sin_family   = PF_INET,
-        .sin_addr     = {
-            .s_addr = htonl(INADDR_ANY)
-        },
-        .sin_port     = htons(hd->config.server_port)
-    };
-#endif
-    /* Enable SO_REUSEADDR to allow binding to the same
-     * address and port when restarting the server */
-    int enable = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
-        /* This will fail if CONFIG_LWIP_SO_REUSE is not enabled. But
-         * it does not affect the normal working of the HTTP Server */
-        ESP_LOGW(TAG, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
-    }
-
-    int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-    if (ret < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
-        close(fd);
-        return ESP_FAIL;
-    }
-
-    ret = listen(fd, hd->config.backlog_conn);
-    if (ret < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in listen (%d)"), errno);
-        close(fd);
-        return ESP_FAIL;
-    }
-
-    int ctrl_fd = cs_create_ctrl_sock(hd->config.ctrl_port);
-    if (ctrl_fd < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in creating ctrl socket (%d)"), errno);
-        close(fd);
-        return ESP_FAIL;
-    }
-
-    int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (msg_fd < 0) {
-        ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);
-        close(fd);
-        close(ctrl_fd);
-        return ESP_FAIL;
-    }
-
-    hd->listen_fd = fd;
-    hd->ctrl_fd = ctrl_fd;
-    hd->msg_fd  = msg_fd;
-    return ESP_OK;
-}
-
-static struct httpd_data *httpd_create(const httpd_config_t *config)
-{
-    /* Allocate memory for httpd instance data */
-    struct httpd_data *hd = calloc(1, sizeof(struct httpd_data));
-    if (!hd) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP server instance"));
-        return NULL;
-    }
-    hd->hd_calls = calloc(config->max_uri_handlers, sizeof(httpd_uri_t *));
-    if (!hd->hd_calls) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP URI handlers"));
-        free(hd);
-        return NULL;
-    }
-    hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
-    if (!hd->hd_sd) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP session data"));
-        free(hd->hd_calls);
-        free(hd);
-        return NULL;
-    }
-    struct httpd_req_aux *ra = &hd->hd_req_aux;
-    ra->resp_hdrs = calloc(config->max_resp_headers, sizeof(struct resp_hdr));
-    if (!ra->resp_hdrs) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP response headers"));
-        free(hd->hd_sd);
-        free(hd->hd_calls);
-        free(hd);
-        return NULL;
-    }
-    hd->err_handler_fns = calloc(HTTPD_ERR_CODE_MAX, sizeof(httpd_err_handler_func_t));
-    if (!hd->err_handler_fns) {
-        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP error handlers"));
-        free(ra->resp_hdrs);
-        free(hd->hd_sd);
-        free(hd->hd_calls);
-        free(hd);
-        return NULL;
-    }
-    /* Save the configuration for this instance */
-    hd->config = *config;
-    return hd;
-}
-
-static void httpd_delete(struct httpd_data *hd)
+static void HttpDelete(struct httpd_data *hd)
 {
     struct httpd_req_aux *ra = &hd->hd_req_aux;
     /* Free memory of httpd instance data */
@@ -387,12 +272,22 @@ static void httpd_delete(struct httpd_data *hd)
     free(hd->hd_sd);
 
     /* Free registered URI handlers */
-    httpd_unregister_all_uri_handlers(hd);
+    for (unsigned i = 0; i < hd->config.max_uri_handlers; i++) {
+        if (!hd->hd_calls[i]) {
+            break;
+        }
+        ESP_LOGD(TAG, LOG_FMT("[%d] removing %s"), i, hd->hd_calls[i]->uri);
+
+        free((char*)hd->hd_calls[i]->uri);
+        free(hd->hd_calls[i]);
+        hd->hd_calls[i] = NULL;
+    }
+
     free(hd->hd_calls);
     free(hd);
 }
 
-esp_err_t httpd_start(httpd_handle_t *handle, const httpd_config_t *config)
+esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
 {
     if (handle == NULL || config == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -415,25 +310,108 @@ esp_err_t httpd_start(httpd_handle_t *handle, const httpd_config_t *config)
         return ESP_ERR_INVALID_ARG;
     }
 
-    struct httpd_data *hd = httpd_create(config);
-    if (hd == NULL) {
-        /* Failed to allocate memory */
+    /* Allocate memory for httpd instance data */
+    struct httpd_data *hd = calloc(1, sizeof(struct httpd_data));
+    if (!hd) {
+        ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP server instance"));
         return ESP_ERR_HTTPD_ALLOC_MEM;
     }
 
-    if (httpd_server_init(hd) != ESP_OK) {
-        httpd_delete(hd);
+    hd->hd_calls = calloc(config->max_uri_handlers, sizeof(httpd_uri_t *));
+    hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
+    struct httpd_req_aux *ra = &hd->hd_req_aux;
+    ra->resp_hdrs = calloc(config->max_resp_headers, sizeof(struct resp_hdr));
+    hd->err_handler_fns = calloc(HTTPD_ERR_CODE_MAX, sizeof(httpd_err_handler_func_t));
+
+    if((!hd->hd_calls) || (!hd->hd_sd) || (!ra->resp_hdrs) || (!hd->err_handler_fns)){
+        if (!hd->hd_calls) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP URI handlers"));}
+        if (!hd->hd_sd) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP session data"));}
+        if (!ra->resp_hdrs) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP response headers"));}
+        if (!hd->err_handler_fns) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP error handlers"));}
+
+        free(ra->resp_hdrs);
+        free(hd->hd_sd);
+        free(hd->hd_calls);
+        free(hd);
+        return ESP_ERR_HTTPD_ALLOC_MEM;
+    }
+    /* Save the configuration for this instance */
+    hd->config = *config;
+
+    int fd = socket(PF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in socket (%d)"), errno);
+        return ESP_FAIL;
+    }
+    struct sockaddr_in serv_addr = {
+        .sin_family   = PF_INET,
+        .sin_addr     = {
+            .s_addr = htonl(INADDR_ANY)
+        },
+        .sin_port     = htons(hd->config.server_port)
+    };
+    /* Enable SO_REUSEADDR to allow binding to the same
+     * address and port when restarting the server */
+    int enable = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
+        /* This will fail if CONFIG_LWIP_SO_REUSE is not enabled. But
+         * it does not affect the normal working of the HTTP Server */
+        ESP_LOGW(TAG, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
+    }
+
+    bool sock_err = false;
+    int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    if (ret < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
+        close(fd);
+        sock_err = true;
+    }
+
+    ret = listen(fd, hd->config.backlog_conn);
+    if (ret < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in listen (%d)"), errno);
+        close(fd);
+        sock_err = true;
+    }
+
+    int ctrl_fd = cs_create_ctrl_sock(hd->config.ctrl_port);
+    if (ctrl_fd < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in creating ctrl socket (%d)"), errno);
+        close(fd);
+        sock_err = true;
+    }
+
+    int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (msg_fd < 0) {
+        ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);
+        close(fd);
+        close(ctrl_fd);
+        sock_err = true;
+    }
+    
+    if(sock_err){
+        HttpDelete(hd);
         return ESP_FAIL;
     }
 
-    httpd_sess_init(hd);
-    if (httpd_os_thread_create(&hd->hd_td.handle, "httpd",
-                               hd->config.stack_size,
-                               hd->config.task_priority,
-                               httpd_thread, hd,
-                               hd->config.core_id) != ESP_OK) {
+    hd->listen_fd = fd;
+    hd->ctrl_fd = ctrl_fd;
+    hd->msg_fd  = msg_fd;
+
+    if((!hd) || (!hd->hd_sd) || (!hd->config.max_open_sockets)) {
+        return ESP_FAIL;
+    }
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while(current <= end){
+        current->fd = -1;
+        current->ctx = NULL;
+        current++;
+    }
+    
+    if (xTaskCreatePinnedToCore(httpd_thread, "httpd", hd->config.stack_size, hd, hd->config.task_priority, &hd->hd_td.handle, hd->config.core_id) != pdPASS) {
         /* Failed to launch task */
-        httpd_delete(hd);
+        HttpDelete(hd);
         return ESP_ERR_HTTPD_TASK;
     }
 
@@ -482,7 +460,7 @@ esp_err_t httpd_stop(httpd_handle_t handle)
         hd->config.global_transport_ctx = NULL;
     }
 
-    ESP_LOGD(TAG, LOG_FMT("server stopped"));
-    httpd_delete(hd);
+    HttpDelete(hd);
+    ESP_LOGI(TAG, LOG_FMT("Server Stopped"));
     return ESP_OK;
 }
