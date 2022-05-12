@@ -3,6 +3,8 @@
 static const char* TAG = "main";
 char buf[500];
 
+
+
 static esp_err_t predo_get_handler(httpd_req_t *req){
 
     httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -95,10 +97,11 @@ void app_main(void){
 
     char http_header[1024] = "HTTP/1.1 200 OK\r\n\n";
     strcat(http_header, buf);
-    
+
     //create http_data object
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+
     config.lru_purge_enable = true;
     config.max_open_sockets = 3;
     
@@ -112,12 +115,11 @@ void app_main(void){
         ESP_LOGI(TAG, "Error starting server!");
         return;
     }
-    
-    for(int k = 10; k > 0; --k){
+
+    for(int k = 20; k > 0; --k){
         ESP_LOGD(TAG, "Stopping in %d seconds", k);
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
-    
     httpd_stop(server);
     return ;
 }
