@@ -2,7 +2,7 @@
 
 static const char* TAG = "main";
 char buf[500];
-
+static bool server_on = true;
 
 
 static esp_err_t predo_get_handler(httpd_req_t *req){
@@ -10,7 +10,6 @@ static esp_err_t predo_get_handler(httpd_req_t *req){
     httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
     lcd_init();
     lcd_send_string("GET REQUEST");
-    ESP_LOGI(TAG, "LCD GET REQUESTED");
     return ESP_OK;
 }
 
@@ -18,7 +17,20 @@ static httpd_uri_t predoServer = {
     .uri = "/predoServer",
     .method = HTTP_GET,
     .handler = predo_get_handler,
-    .user_ctx = "LCD ACCESSED"
+    .user_ctx = "PREDO SERVER"
+};
+
+static esp_err_t predo_server_stop(httpd_req_t *req){
+    httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
+    server_on = false;
+    return ESP_OK;
+}
+
+static httpd_uri_t predoStop = {
+    .uri = "/stop",
+    .method = HTTP_GET,
+    .handler = predo_server_stop,
+    .user_ctx = "STOPPING SERVER"
 };
 
 void app_main(void){
@@ -109,17 +121,22 @@ void app_main(void){
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &predoServer);
+        httpd_register_uri_handler(server, &predoStop);
         ESP_LOGI(TAG, "Server Started");
         SevSegInt(0);
     }else{
         ESP_LOGI(TAG, "Error starting server!");
         return;
     }
-
+    while(server_on){
+        vTaskDelay(100/portTICK_PERIOD_MS);
+    }
     for(int k = 30; k > 0; --k){
         ESP_LOGD(TAG, "Stopping in %d seconds", k);
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
     httpd_stop(server);
+    lcd_put_cur(0,0);
+    lcd_send_string("SERVER STOPPED");
     return ;
 }
