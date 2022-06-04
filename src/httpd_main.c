@@ -12,9 +12,11 @@
 #include <esp_err.h>
 #include <assert.h>
 
-#include <PredoHttpServer.h>
+
+#include "PredoHttpServer.h"
 #include "esp_httpd_priv.h"
 #include "ctrl_sock.h"
+
 
 typedef struct {
     fd_set *fdset;
@@ -76,6 +78,11 @@ struct httpd_ctrl_data {
     httpd_work_fn_t hc_work;
     void *hc_work_arg;
 };
+
+static int fd_is_valid(int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
 
 esp_err_t httpd_queue_work(httpd_handle_t handle, httpd_work_fn_t work, void *arg)
 {
@@ -188,7 +195,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     ESP_LOGI(TAG, "HTTP SERVER");
     fd_set read_set;
     FD_ZERO(&read_set);
-    if (hd->config.lru_purge_enable || httpd_is_sess_available(hd)) {
+    if (hd->config.lru_purge_enable || httpd_sess_get_free(hd)) {
         /* Only listen for new connections if server has capacity to
          * handle more (or when LRU purge is enabled, in which case
          * older connections will be closed) */
@@ -196,24 +203,71 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     }
     FD_SET(hd->ctrl_fd, &read_set);
 
-    int tmp_max_fd;
-    httpd_sess_set_descriptors(hd, &read_set, &tmp_max_fd);
-    int maxfd = MAX(hd->listen_fd, tmp_max_fd);
-    tmp_max_fd = maxfd;
-    maxfd = MAX(hd->ctrl_fd, tmp_max_fd);
+    //Set session descriptors
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    int max_fd = -1;
+    while(current <= end){
+        if(current->fd != -1){
+            FD_SET(current->fd, &read_set);
+            if(current->fd > max_fd){
+                max_fd = current->fd;
+            }
+        }
+        current++;
+    }
+
+    int maxfd = MAX(hd->listen_fd, max_fd);
+    max_fd = maxfd;
+    maxfd = MAX(hd->ctrl_fd, max_fd);
 
     ESP_LOGD(TAG, LOG_FMT("doing select maxfd+1 = %d"), maxfd + 1);
     int active_cnt = select(maxfd + 1, &read_set, NULL, NULL, NULL);
     if (active_cnt < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in select (%d)"), errno);
-        httpd_sess_delete_invalid(hd);
-        return ESP_OK;
+        //delete invalid sess
+        current = hd->hd_sd;
+        end = hd->hd_sd + hd->config.max_open_sockets - 1;
+
+        while (current <= end) {
+            if (!fd_is_valid(current->fd)) {
+                ESP_LOGW(TAG, LOG_FMT("Closing invalid socket %d"), current->fd);
+                httpd_sess_delete(hd, current);
+            }
+            current++;
+        }
     }
 
     /* Case0: Do we have a control message? */
     if (FD_ISSET(hd->ctrl_fd, &read_set)) {
         ESP_LOGD(TAG, LOG_FMT("processing ctrl message"));
-        httpd_process_ctrl_msg(hd);
+        //process ctrl msg
+        struct httpd_ctrl_data msg;
+        int ret = recv(hd->ctrl_fd, &msg, sizeof(msg), 0);
+        if (ret <= 0) {
+            ESP_LOGW(TAG, LOG_FMT("error in recv (%d)"), errno);
+            return ESP_FAIL;
+        }
+        if (ret != sizeof(msg)) {
+            ESP_LOGW(TAG, LOG_FMT("incomplete msg"));
+            return ESP_FAIL;
+        }
+
+        switch (msg.hc_msg) {
+        case HTTPD_CTRL_WORK:
+            if (msg.hc_work) {
+                ESP_LOGD(TAG, LOG_FMT("work"));
+                (*msg.hc_work)(msg.hc_work_arg);
+            }
+            break;
+        case HTTPD_CTRL_SHUTDOWN:
+            ESP_LOGD(TAG, LOG_FMT("shutdown"));
+            hd->hd_td.status = THREAD_STOPPING;
+            break;
+        default:
+            break;
+        }
+        
         if (hd->hd_td.status == THREAD_STOPPING) {
             ESP_LOGD(TAG, LOG_FMT("stopping thread"));
             return ESP_FAIL;

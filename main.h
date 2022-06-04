@@ -27,8 +27,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#include "PredoHttpServer.h"
-#include "esp_httpd_priv.h"
+#include "inc/PredoHttpServer.h"
+#include "inc/esp_httpd_priv.h"
 
 
 EventGroupHandle_t wifi_event_group;

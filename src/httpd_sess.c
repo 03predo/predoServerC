@@ -147,14 +147,20 @@ static void httpd_sess_close(void *arg)
 
 struct sock_db *httpd_sess_get_free(struct httpd_data *hd)
 {
+    ESP_LOGD(TAG, LOG_FMT("IN GET FREE"));
     if ((!hd) || (hd->hd_sd_active_count == hd->config.max_open_sockets)) {
         return NULL;
     }
-    enum_context_t context = {
-        .task = HTTPD_TASK_GET_FREE
-    };
-    httpd_sess_enum(hd, enum_function, &context);
-    return context.session;
+
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while(current <= end){
+        if(current->fd < 0){
+            return current;
+        }
+        current++;
+    }
+    return NULL;
 }
 
 bool httpd_is_sess_available(struct httpd_data *hd)
@@ -327,24 +333,44 @@ void httpd_sess_set_transport_ctx(httpd_handle_t handle, int sockfd, void *ctx, 
 
 void httpd_sess_set_descriptors(struct httpd_data *hd, fd_set *fdset, int *maxfd)
 {
-    enum_context_t context = {
-        .task = HTTPD_TASK_SET_DESCRIPTOR,
-        .max_fd = -1,
-        .fdset = fdset
-    };
-    httpd_sess_enum(hd, enum_function, &context);
+    if((!hd) || (!hd->hd_sd) || (!hd->config.max_open_sockets)){
+        return;
+    }
+
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    int max_fd = -1;
+    while(current <= end){
+        if(current->fd != -1){
+            FD_SET(current->fd, fdset);
+            if(current->fd > max_fd){
+                max_fd = current->fd;
+            }
+        }
+        current++;
+    }
+
     if (maxfd) {
-        *maxfd = context.max_fd;
+        *maxfd = max_fd;
     }
 }
 
 void httpd_sess_delete_invalid(struct httpd_data *hd)
 {
-    enum_context_t context = {
-        .task = HTTPD_TASK_DELETE_INVALID,
-        .hd = hd
-    };
-    httpd_sess_enum(hd, enum_function, &context);
+    if ((!hd) || (!hd->hd_sd) || (!hd->config.max_open_sockets)) {
+        return;
+    }
+
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+
+    while (current <= end) {
+        if (!fd_is_valid(current->fd)) {
+            ESP_LOGW(TAG, LOG_FMT("Closing invalid socket %d"), current->fd);
+            httpd_sess_delete(hd, current);
+        }
+        current++;
+    }
 }
 
 void httpd_sess_delete(struct httpd_data *hd, struct sock_db *session)

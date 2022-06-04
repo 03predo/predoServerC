@@ -9,7 +9,7 @@
 #include <sys/param.h>
 #include <esp_log.h>
 #include <esp_err.h>
-#include <http_parser.h>
+#include "http_parser.h"
 
 #include <PredoHttpServer.h>
 #include "esp_httpd_priv.h"
@@ -558,6 +558,7 @@ static int parse_block(http_parser *parser, size_t offset, size_t length)
     }
 
     /* Execute http_parser */
+    ESP_LOGI(TAG, LOG_FMT("PARSER EXCECUTE"));
     nparsed = http_parser_execute(parser, &data->settings,
                                   raux->scratch + offset, length);
 
@@ -626,6 +627,8 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
 
     /* Set offset to start of scratch buffer */
     offset = 0;
+    int cycle_no = 0;
+    
     do {
         /* Read block into scratch buffer */
         if ((blk_len = read_block(r, offset, PARSER_BLOCK_SIZE)) < 0) {
@@ -653,6 +656,8 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
              * invoke error handler */
             return httpd_req_handle_err(r, parser_data.error);
         }
+        ESP_LOGI(TAG, LOG_FMT("READ/PARSE CYCLE %d"), cycle_no);
+        ++cycle_no;
     } while (parser_data.status != PARSING_COMPLETE);
 
     ESP_LOGD(TAG, LOG_FMT("parsing complete"));

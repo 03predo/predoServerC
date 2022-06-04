@@ -85,10 +85,10 @@ static size_t httpd_recv_pending(httpd_req_t *r, char *buf, size_t buf_len)
 {
     struct httpd_req_aux *ra = r->aux;
     size_t offset = sizeof(ra->sd->pending_data) - ra->sd->pending_len;
-
+    ESP_LOGI(TAG, LOG_FMT("offset: %d"), offset);
     /* buf_len must not be greater than remaining_len */
     buf_len = MIN(ra->sd->pending_len, buf_len);
-    memcpy(buf, ra->sd->pending_data + offset, buf_len);
+    memcpy(buf, ra->sd->pending_data + offset, buf_len);// why are we shifting pending_data forward by the offset, does it fill from back 
 
     ra->sd->pending_len -= buf_len;
     return buf_len;
@@ -96,16 +96,18 @@ static size_t httpd_recv_pending(httpd_req_t *r, char *buf, size_t buf_len)
 
 int httpd_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_after_pending)
 {
-    ESP_LOGD(TAG, LOG_FMT("requested length = %d"), buf_len);
+    ESP_LOGI(TAG, LOG_FMT("requested length = %d"), buf_len);
 
     size_t pending_len = 0;
     struct httpd_req_aux *ra = r->aux;
 
     /* First fetch pending data from local buffer */
     if (ra->sd->pending_len > 0) {
-        ESP_LOGD(TAG, LOG_FMT("pending length = %d"), ra->sd->pending_len);
+        ESP_LOGI(TAG, LOG_FMT("pending length = %d"), ra->sd->pending_len);
         pending_len = httpd_recv_pending(r, buf, buf_len);
+        //move pointer forward to account for pending_data
         buf     += pending_len;
+        //adjust remaining parser block space left for remaining data
         buf_len -= pending_len;
 
         /* If buffer filled then no need to recv.
@@ -117,7 +119,7 @@ int httpd_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_aft
     }
 
     /* Receive data of remaining length */
-    int ret = ra->sd->recv_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0);
+    int ret = ra->sd->recv_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0); //httpd_default_recv, returns number of bytes received
     if (ret < 0) {
         ESP_LOGD(TAG, LOG_FMT("error in recv_fn"));
         if ((ret == HTTPD_SOCK_ERR_TIMEOUT) && (pending_len != 0)) {
@@ -133,7 +135,7 @@ int httpd_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_aft
     }
 
     ESP_LOGD(TAG, LOG_FMT("received length = %d"), ret + pending_len);
-    return ret + pending_len;
+    return ret + pending_len; // amount that the 128 byte block is filled
 }
 
 int httpd_recv(httpd_req_t *r, char *buf, size_t buf_len)

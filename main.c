@@ -5,6 +5,17 @@ char buf[500];
 static bool server_on = true;
 
 
+static esp_err_t favicon_get_handler(httpd_req_t *req)
+{
+    return ESP_OK;
+}
+
+static httpd_uri_t predoFavicon = {
+    .uri = "/favicon.ico",
+    .method = HTTP_GET,
+    .handler = favicon_get_handler
+};
+
 static esp_err_t predo_get_handler(httpd_req_t *req){
 
     httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -122,6 +133,7 @@ void app_main(void){
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &predoServer);
         httpd_register_uri_handler(server, &predoStop);
+        httpd_register_uri_handler(server, &predoFavicon);
         ESP_LOGI(TAG, "Server Started");
         SevSegInt(0);
     }else{
