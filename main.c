@@ -143,7 +143,7 @@ void app_main(void){
     while(server_on){
         vTaskDelay(100/portTICK_PERIOD_MS);
     }
-    for(int k = 30; k > 0; --k){
+    for(int k = 20; k > 0; --k){
         ESP_LOGD(TAG, "Stopping in %d seconds", k);
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
