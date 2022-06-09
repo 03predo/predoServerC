@@ -127,7 +127,7 @@ void app_main(void){
 
     config.lru_purge_enable = true;
     config.max_open_sockets = 3;
-    ESP_LOGI(TAG, "test for jenkins");
+
     if (HttpStart(&server, &config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
