@@ -91,7 +91,6 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
             if (!lru_session) {
                 return ESP_ERR_NOT_FOUND;
             }
-            // return httpd_queue_work(hd, httpd_sess_close, lru_session);
             struct httpd_ctrl_data msg = {
                 .hc_msg = HTTPD_CTRL_WORK,
                 .hc_work = httpd_sess_close,
