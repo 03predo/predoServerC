@@ -192,11 +192,14 @@ esp_err_t httpd_sess_new(struct httpd_data *hd, int newfd)
 {
     ESP_LOGD(TAG, LOG_FMT("fd = %d"), newfd);
 
+    //sess_get loops though all sockets in socket database
+    //if the socket is in the database a session is already open for it
     if (httpd_sess_get(hd, newfd)) {
         ESP_LOGE(TAG, LOG_FMT("session already exists with fd = %d"), newfd);
         return ESP_FAIL;
     }
-
+    //sess_get_free loops through all sockets in database
+    //if the socket is negative it is unused and can be used for new connection
     struct sock_db *session = httpd_sess_get_free(hd);
     if (!session) {
         ESP_LOGD(TAG, LOG_FMT("unable to launch session for fd = %d"), newfd);
@@ -211,6 +214,7 @@ esp_err_t httpd_sess_new(struct httpd_data *hd, int newfd)
     session->recv_fn = httpd_default_recv;
 
     // Call user-defined session opening function
+    //this is default left null
     if (hd->config.open_fn) {
         esp_err_t ret = hd->config.open_fn(hd, session->fd);
         if (ret != ESP_OK) {

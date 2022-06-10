@@ -27,22 +27,17 @@ static const char *TAG = "httpd";
 
 static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
 {
-    /* If no space is available for new session, close the least recently used one */
+    // If no space is available for new session, close the least recently used one 
     if (hd->config.lru_purge_enable == true) {
         if (!httpd_is_sess_available(hd)) {
-            /* Queue asynchronous closure of the least recently used session */
             return httpd_sess_close_lru(hd);
-            /* Returning from this allowes the main server thread to process
-             * the queued asynchronous control message for closing LRU session.
-             * Since connection request hasn't been addressed yet using accept()
-             * therefore httpd_accept_conn() will be called again, but this time
-             * with space available for one session
-             */
         }
     }
 
     struct sockaddr_in addr_from;
     socklen_t addr_from_len = sizeof(addr_from);
+    //accept will create a new socket for the new connection
+    //the address of the connecting socket will be stored in addr_from
     int new_fd = accept(listen_fd, (struct sockaddr *)&addr_from, &addr_from_len);
     if (new_fd < 0) {
         ESP_LOGW(TAG, LOG_FMT("error in accept (%d)"), errno);
@@ -51,16 +46,20 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
     ESP_LOGD(TAG, LOG_FMT("newfd = %d"), new_fd);
 
     struct timeval tv;
-    /* Set recv timeout of this fd as per config */
+    //set recv timeout of this fd as per config, how much time 
+    //to wait for socket when recving data
     tv.tv_sec = hd->config.recv_wait_timeout;
     tv.tv_usec = 0;
     setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 
-    /* Set send timeout of this fd as per config */
+    //Set send timeout of this fd as per config, how much time
+    //to wait for socket when sending it data
     tv.tv_sec = hd->config.send_wait_timeout;
     tv.tv_usec = 0;
     setsockopt(new_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
 
+    //sess_new either confirms a session is already open for the
+    //fd or assigns it to an empty session
     if (ESP_OK != httpd_sess_new(hd, new_fd)) {
         ESP_LOGW(TAG, LOG_FMT("session creation failed"));
         close(new_fd);
@@ -193,17 +192,24 @@ static int httpd_process_session(struct sock_db *session, void *context)
 static esp_err_t httpd_server(struct httpd_data *hd)
 {
     ESP_LOGI(TAG, "HTTP SERVER");
+    //start by initializing the file descriptor(fd) set, 
     fd_set read_set;
+    //FD_ZERO initialized the fd set (read_set) to be empty
     FD_ZERO(&read_set);
+
     if (hd->config.lru_purge_enable || httpd_sess_get_free(hd)) {
         /* Only listen for new connections if server has capacity to
          * handle more (or when LRU purge is enabled, in which case
          * older connections will be closed) */
+        //FD_SET adds the fd (listen_fd) to the fd set (reads_set)
+        //listen_fd will be used to listen for new connections to the server
         FD_SET(hd->listen_fd, &read_set);
     }
+    //ctrl_fd will be used to send ctrl msgs to server
+    //only known ctrl msgs are shutdown and work
     FD_SET(hd->ctrl_fd, &read_set);
 
-    //Set session descriptors
+    //we now add all fds in database to read_set
     struct sock_db *current = hd->hd_sd;
     struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
     int max_fd = -1;
@@ -217,11 +223,18 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         current++;
     }
 
+    //when fds are active they are given an integer identifier
+    //when a fd becomes active it will always take the lowest available positive int
+    //so if we take the highest fd value that will give us the max number of sockets
+    //open at a given time
     int maxfd = MAX(hd->listen_fd, max_fd);
     max_fd = maxfd;
     maxfd = MAX(hd->ctrl_fd, max_fd);
 
     ESP_LOGD(TAG, LOG_FMT("doing select maxfd+1 = %d"), maxfd + 1);
+    //select goes through the first (maxfd + 1) fds in read_set to see
+    //if they are ready to be read from, and returns the amount of ready sockets
+    //it also modifies read_set to only contain the fds that are ready to read from
     int active_cnt = select(maxfd + 1, &read_set, NULL, NULL, NULL);
     if (active_cnt < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in select (%d)"), errno);
@@ -239,10 +252,13 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     }
 
     /* Case0: Do we have a control message? */
+    //if ctrl_fd has a message, it will have stayed in read_set after select()
+    //FD_ISSET returns true if the fd is in the set and false otherwise
     if (FD_ISSET(hd->ctrl_fd, &read_set)) {
         ESP_LOGD(TAG, LOG_FMT("processing ctrl message"));
-        //process ctrl msg
         struct httpd_ctrl_data msg;
+        //recv will take in the data on ctrl_fd into the buffer msg
+        //it returns the length of the message
         int ret = recv(hd->ctrl_fd, &msg, sizeof(msg), 0);
         if (ret <= 0) {
             ESP_LOGW(TAG, LOG_FMT("error in recv (%d)"), errno);
@@ -257,6 +273,9 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         case HTTPD_CTRL_WORK:
             if (msg.hc_work) {
                 ESP_LOGD(TAG, LOG_FMT("work"));
+                //the work ctrl message is used for deleting sockets
+                //msg.hc_work is a pointer to a function and msg.hc_work_arg
+                //is the paramter of the function, see httpd_sess_trigger_close_
                 (*msg.hc_work)(msg.hc_work_arg);
             }
             break;
@@ -284,6 +303,9 @@ static esp_err_t httpd_server(struct httpd_data *hd)
 
     /* Case2: Do we have any incoming connection requests to
      * process? */
+    //same as with ctrl msg, if listen_fd has a request
+    //it will have stayed in read_set after select, so we
+    //check if it is in read_set with FD_ISSET
     if (FD_ISSET(hd->listen_fd, &read_set)) {
         ESP_LOGD(TAG, LOG_FMT("processing listen socket %d"), hd->listen_fd);
         if (httpd_accept_conn(hd, hd->listen_fd) != ESP_OK) {
@@ -371,7 +393,9 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         return ESP_ERR_HTTPD_ALLOC_MEM;
     }
 
+
     hd->hd_calls = calloc(config->max_uri_handlers, sizeof(httpd_uri_t *));
+    //hd_sd is the pointer to the first socket in the socker database
     hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
     struct httpd_req_aux *ra = &hd->hd_req_aux;
     ra->resp_hdrs = calloc(config->max_resp_headers, sizeof(struct resp_hdr));
@@ -389,9 +413,9 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         free(hd);
         return ESP_ERR_HTTPD_ALLOC_MEM;
     }
-    /* Save the configuration for this instance */
     hd->config = *config;
 
+    //fd will be the socket we listen on for new connections
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in socket (%d)"), errno);
@@ -414,6 +438,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     }
 
     bool sock_err = false;
+    //bind the socket to the address
     int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
     if (ret < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in bind (%d)"), errno);
@@ -421,6 +446,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         sock_err = true;
     }
 
+    //listen if any backlog connections
     ret = listen(fd, hd->config.backlog_conn);
     if (ret < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in listen (%d)"), errno);
@@ -428,6 +454,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         sock_err = true;
     }
 
+    //ctrl socket will listen for ctrl msgs
     int ctrl_fd = cs_create_ctrl_sock(hd->config.ctrl_port);
     if (ctrl_fd < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in creating ctrl socket (%d)"), errno);
@@ -435,6 +462,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         sock_err = true;
     }
 
+    //msg socket will 
     int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (msg_fd < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);
@@ -455,6 +483,8 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     if((!hd) || (!hd->hd_sd) || (!hd->config.max_open_sockets)) {
         return ESP_FAIL;
     }
+
+    //set all sockets to -1 in socket database
     struct sock_db *current = hd->hd_sd;
     struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
     while(current <= end){
