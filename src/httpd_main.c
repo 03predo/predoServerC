@@ -16,6 +16,8 @@
 #include "PredoHttpServer.h"
 #include "esp_httpd_priv.h"
 #include "ctrl_sock.h"
+#include "SevSeg.h"
+
 
 
 typedef struct {
@@ -23,15 +25,92 @@ typedef struct {
     struct httpd_data *hd;
 } process_session_context_t;
 
+struct httpd_ctrl_data {
+    enum httpd_ctrl_msg {
+        HTTPD_CTRL_SHUTDOWN,
+        HTTPD_CTRL_WORK,
+    } hc_msg;
+    httpd_work_fn_t hc_work;
+    void *hc_work_arg;
+};
+
 static const char *TAG = "httpd";
+
+// static void httpd_sess_close(void *arg)
+// {
+//     struct sock_db *sock_db = (struct sock_db *) arg;
+//     if (!sock_db) {
+//         return;
+//     }
+
+//     if (!sock_db->lru_counter && !sock_db->lru_socket) {
+//         ESP_LOGD(TAG, "Skipping session close for %d as it seems to be a race condition", sock_db->fd);
+//         return;
+//     }
+//     sock_db->lru_socket = false;
+//     struct httpd_data *hd = (struct httpd_data *) sock_db->handle;
+//     httpd_sess_delete(hd, sock_db);
+// }
 
 static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
 {
     // If no space is available for new session, close the least recently used one 
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
     if (hd->config.lru_purge_enable == true) {
-        if (!httpd_is_sess_available(hd)) {
-            return httpd_sess_close_lru(hd);
+        ESP_LOGD(TAG, LOG_FMT("checking for free sessions"));
+        bool free_sess = false;
+        while(current <= end){
+            if(current->fd < 0){
+                free_sess = true;
+            }
+            current++;
         }
+        if (!free_sess) {
+            ESP_LOGD(TAG, LOG_FMT("no free sessions, closing least recently used"));
+            current = hd->hd_sd;
+            end = hd->hd_sd + hd->config.max_open_sockets - 1;
+            long long unsigned int lru_counter = UINT64_MAX;
+            struct sock_db * lru_session = NULL;
+            while(current <= end){
+                if (current->fd == -1) {
+                    return 0;
+                }
+                // Check/update lowest lru
+                if (current->lru_counter < lru_counter) {
+                    lru_counter = current->lru_counter;
+                    lru_session = current;
+                }
+                current++;
+            }
+            if (!lru_session) {
+                return ESP_OK;
+            }
+            ESP_LOGD(TAG, LOG_FMT("closing session with fd %d"), lru_session->fd);
+            lru_session->lru_socket = true;
+            if (!lru_session) {
+                return ESP_ERR_NOT_FOUND;
+            }
+            // return httpd_queue_work(hd, httpd_sess_close, lru_session);
+            struct httpd_ctrl_data msg = {
+                .hc_msg = HTTPD_CTRL_WORK,
+                .hc_work = httpd_sess_close,
+                .hc_work_arg = lru_session,
+            };
+            ESP_LOGD(TAG, LOG_FMT("sending work ctrl msg"));
+            struct sockaddr_in to_addr;
+            to_addr.sin_family = AF_INET;
+            to_addr.sin_port = htons(hd->config.ctrl_port);
+            inet_aton("127.0.0.1", &to_addr.sin_addr);
+            int ret = sendto(hd->msg_fd, &msg, sizeof(msg), 0, (struct sockaddr *)&to_addr, sizeof(to_addr));
+            
+            if (ret < 0) {
+                ESP_LOGW(TAG, LOG_FMT("failed to queue work"));
+                return ESP_FAIL;
+            }
+            return ESP_OK;
+        }
+        ESP_LOGD(TAG, LOG_FMT("session available, starting to accept"));
     }
 
     struct sockaddr_in addr_from;
@@ -43,7 +122,7 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
         ESP_LOGW(TAG, LOG_FMT("error in accept (%d)"), errno);
         return ESP_FAIL;
     }
-    ESP_LOGD(TAG, LOG_FMT("newfd = %d"), new_fd);
+    ESP_LOGD(TAG, LOG_FMT("accepted new fd = %d"), new_fd);
 
     struct timeval tv;
     //set recv timeout of this fd as per config, how much time 
@@ -51,32 +130,69 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
     tv.tv_sec = hd->config.recv_wait_timeout;
     tv.tv_usec = 0;
     setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+    ESP_LOGD(TAG, LOG_FMT("setting recv timeout to %d"), hd->config.recv_wait_timeout);
 
     //Set send timeout of this fd as per config, how much time
     //to wait for socket when sending it data
     tv.tv_sec = hd->config.send_wait_timeout;
     tv.tv_usec = 0;
     setsockopt(new_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
+    ESP_LOGD(TAG, LOG_FMT("setting send timeout to %d"), hd->config.recv_wait_timeout);
 
     //sess_new either confirms a session is already open for the
     //fd or assigns it to an empty session
-    if (ESP_OK != httpd_sess_new(hd, new_fd)) {
-        ESP_LOGW(TAG, LOG_FMT("session creation failed"));
+
+    //sess_get loops though all sockets in socket database
+    //if the socket is in the database a session is already open for it
+    ESP_LOGD(TAG, LOG_FMT("checking if fd %d is already in session"), new_fd);
+    current = hd->hd_sd;
+    while (current <= end) {
+        if(current->fd == new_fd){
+            ESP_LOGE(TAG, LOG_FMT("session already exists with fd %d"), new_fd);
+            close(new_fd);
+            return ESP_FAIL;
+        }
+        current++;
+    }
+    ESP_LOGD(TAG, LOG_FMT("fd %d not in session"), new_fd);
+    //sess_get_free loops through all sockets in database
+    //if the socket is negative it is unused and can be used for new connection
+    ESP_LOGD(TAG, LOG_FMT("checking for free session"));
+    struct sock_db *session = NULL;
+    current = hd->hd_sd;
+    end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while (current <= end) {
+        if(current->fd < 0){
+            session = current;
+            ESP_LOGD(TAG, LOG_FMT("free session found"));
+        }
+        current++;
+    }
+    if (!session) {
+        ESP_LOGD(TAG, LOG_FMT("unable to launch session for fd = %d"), new_fd);
         close(new_fd);
         return ESP_FAIL;
     }
-    ESP_LOGD(TAG, LOG_FMT("complete"));
+    
+    // Clear session data
+    ESP_LOGD(TAG, LOG_FMT("clearing old session data"));
+    memset(session, 0, sizeof (struct sock_db));
+    ESP_LOGD(TAG, LOG_FMT("adding new session data"));
+    session->fd = new_fd;
+    session->handle = (httpd_handle_t) hd;
+    session->send_fn = httpd_default_send;
+    session->recv_fn = httpd_default_recv;
+
+
+    ESP_LOGD(TAG, LOG_FMT("fd %d connection complete"), session->fd);
+    // increment number of sessions
+    hd->hd_sd_active_count++;
+    ESP_LOGD(TAG, LOG_FMT("active sockets: %d"), hd->hd_sd_active_count);
+    SevSegInt(hd->hd_sd_active_count);
+
+    
     return ESP_OK;
 }
-
-struct httpd_ctrl_data {
-    enum httpd_ctrl_msg {
-        HTTPD_CTRL_SHUTDOWN,
-        HTTPD_CTRL_WORK,
-    } hc_msg;
-    httpd_work_fn_t hc_work;
-    void *hc_work_arg;
-};
 
 static int fd_is_valid(int fd)
 {
@@ -133,36 +249,6 @@ void *httpd_get_global_user_ctx(httpd_handle_t handle)
 void *httpd_get_global_transport_ctx(httpd_handle_t handle)
 {
     return ((struct httpd_data *)handle)->config.global_transport_ctx;
-}
-
-
-static void httpd_process_ctrl_msg(struct httpd_data *hd)
-{
-    struct httpd_ctrl_data msg;
-    int ret = recv(hd->ctrl_fd, &msg, sizeof(msg), 0);
-    if (ret <= 0) {
-        ESP_LOGW(TAG, LOG_FMT("error in recv (%d)"), errno);
-        return;
-    }
-    if (ret != sizeof(msg)) {
-        ESP_LOGW(TAG, LOG_FMT("incomplete msg"));
-        return;
-    }
-
-    switch (msg.hc_msg) {
-    case HTTPD_CTRL_WORK:
-        if (msg.hc_work) {
-            ESP_LOGD(TAG, LOG_FMT("work"));
-            (*msg.hc_work)(msg.hc_work_arg);
-        }
-        break;
-    case HTTPD_CTRL_SHUTDOWN:
-        ESP_LOGD(TAG, LOG_FMT("shutdown"));
-        hd->hd_td.status = THREAD_STOPPING;
-        break;
-    default:
-        break;
-    }
 }
 
 // Called for each session from httpd_server

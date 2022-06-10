@@ -12,6 +12,7 @@
 #include "SevSeg.h"
 #include <PredoHttpServer.h>
 #include "esp_httpd_priv.h"
+#include "ctrl_sock.h"
 
 static const char *TAG = "httpd_sess";
 
@@ -129,7 +130,7 @@ static int enum_function(struct sock_db *session, void *context)
     return 1;
 }
 
-static void httpd_sess_close(void *arg)
+void httpd_sess_close(void *arg)
 {
     struct sock_db *sock_db = (struct sock_db *) arg;
     if (!sock_db) {
@@ -190,22 +191,39 @@ struct sock_db *httpd_sess_get(struct httpd_data *hd, int sockfd)
 
 esp_err_t httpd_sess_new(struct httpd_data *hd, int newfd)
 {
-    ESP_LOGD(TAG, LOG_FMT("fd = %d"), newfd);
-
     //sess_get loops though all sockets in socket database
     //if the socket is in the database a session is already open for it
-    if (httpd_sess_get(hd, newfd)) {
-        ESP_LOGE(TAG, LOG_FMT("session already exists with fd = %d"), newfd);
-        return ESP_FAIL;
+    ESP_LOGD(TAG, LOG_FMT("checking if fd is already in session"));
+    struct sock_db *current = hd->hd_sd;
+    struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+
+    while (current <= end) {
+        if(current->fd == newfd){
+            ESP_LOGE(TAG, LOG_FMT("session already exists with fd = %d"), newfd);
+            return ESP_FAIL;
+        }
+        current++;
     }
+    ESP_LOGD(TAG, LOG_FMT("fd not in session"));
     //sess_get_free loops through all sockets in database
     //if the socket is negative it is unused and can be used for new connection
-    struct sock_db *session = httpd_sess_get_free(hd);
+    ESP_LOGD(TAG, LOG_FMT("checking for free session"));
+    // struct sock_db *session = httpd_sess_get_free(hd);
+    struct sock_db *session = NULL;
+    current = hd->hd_sd;
+    end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while (current <= end) {
+        if(current->fd < 0){
+            session = current;
+            ESP_LOGD(TAG, LOG_FMT("free session found"));
+        }
+        current++;
+    }
     if (!session) {
         ESP_LOGD(TAG, LOG_FMT("unable to launch session for fd = %d"), newfd);
         return ESP_FAIL;
     }
-
+    
     // Clear session data
     memset(session, 0, sizeof (struct sock_db));
     session->fd = newfd;
@@ -465,21 +483,45 @@ esp_err_t httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd)
     return ESP_ERR_NOT_FOUND;
 }
 
-esp_err_t httpd_sess_close_lru(struct httpd_data *hd)
-{
-    enum_context_t context = {
-        .task = HTTPD_TASK_FIND_LOWEST_LRU,
-        .lru_counter = UINT64_MAX,
-        .fd = -1
-    };
-    httpd_sess_enum(hd, enum_function, &context);
-    if (!context.session) {
-        return ESP_OK;
-    }
-    ESP_LOGD(TAG, LOG_FMT("Closing session with fd %d"), context.session->fd);
-    context.session->lru_socket = true;
-    return httpd_sess_trigger_close_(hd, context.session);
-}
+// esp_err_t httpd_sess_close_lru(struct httpd_data *hd)
+// {
+//     struct sock_db *current = hd->hd_sd;
+//     struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
+//     long long unsigned int lru_counter = UINT64_MAX;
+//     struct sock_db * lru_session = NULL;
+//     while(current <= end){
+//             if (current->fd == -1) {
+//                 return 0;
+//             }
+//             // Check/update lowest lru
+//             if (current->lru_counter < lru_counter) {
+//                 lru_counter = current->lru_counter;
+//                 lru_session = current;
+//             }
+//             current++;
+//         }
+//     if (!lru_session) {
+//         return ESP_OK;
+//     }
+//     ESP_LOGD(TAG, LOG_FMT("Closing session with fd %d"), lru_session->fd);
+//     lru_session->lru_socket = true;
+//     if (!lru_session) {
+//         return ESP_ERR_NOT_FOUND;
+//     }
+//     // return httpd_queue_work(hd, httpd_sess_close, lru_session);
+//     struct httpd_ctrl_data msg = {
+//         .hc_msg = HTTPD_CTRL_WORK,
+//         .hc_work = httpd_sess_close,
+//         .hc_work_arg = lru_session,
+//     };
+
+//     int ret = cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg));
+//     if (ret < 0) {
+//         ESP_LOGW(TAG, LOG_FMT("failed to queue work"));
+//         return ESP_FAIL;
+//     }
+//     return ESP_OK;
+// }
 
 esp_err_t httpd_sess_trigger_close_(httpd_handle_t handle, struct sock_db *session)
 {

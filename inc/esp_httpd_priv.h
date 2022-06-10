@@ -541,6 +541,8 @@ esp_err_t httpd_sess_trigger_close_(httpd_handle_t handle, struct sock_db *sessi
  * @}
  */
 
+void httpd_sess_close(void *arg);
+
 #ifdef __cplusplus
 }
 #endif
