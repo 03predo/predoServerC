@@ -94,17 +94,17 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
                 .hc_type = HTTPD_CTRL_CLOSE,
                 .hc_arg = lru_session,
             };
-            ESP_LOGD(TAG, LOG_FMT("sending work ctrl msg"));
+            ESP_LOGD(TAG, LOG_FMT("sending ctrl close msg"));
             struct sockaddr_in to_addr;
             to_addr.sin_family = AF_INET;
             to_addr.sin_port = htons(hd->config.ctrl_port);
             inet_aton("127.0.0.1", &to_addr.sin_addr);
             int ret = sendto(hd->msg_fd, &msg, sizeof(msg), 0, (struct sockaddr *)&to_addr, sizeof(to_addr));
-            
             if (ret < 0) {
-                ESP_LOGW(TAG, LOG_FMT("failed to queue work"));
+                ESP_LOGW(TAG, LOG_FMT("failed to send ctrl close msg"));
                 return ESP_FAIL;
             }
+            ESP_LOGD(TAG, LOG_FMT("ctrl close msg sent"));
             return ESP_OK;
         }
         ESP_LOGD(TAG, LOG_FMT("session available, starting to accept"));
@@ -358,8 +358,27 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         .fdset = &read_set,
         .hd = hd
     };
-    httpd_sess_enum(hd, httpd_process_session, &context);
-
+    // httpd_sess_enum(hd, httpd_process_session, &context);
+    //loop through sessions in database to see if any
+    current = hd->hd_sd;
+    end = hd->hd_sd + hd->config.max_open_sockets - 1;
+    while (current <= end) {
+        if (!(current->fd < 0) && FD_ISSET(current->fd, context.fdset)) {
+            ESP_LOGD(TAG, LOG_FMT("processing socket %d"), current->fd);
+            ESP_LOGD(TAG, LOG_FMT("httpd_req_new"));
+            esp_err_t ret = httpd_req_new(hd, current);
+            if(ret == ESP_OK){
+                ESP_LOGD(TAG, LOG_FMT("httpd_req_delete"));
+                ret = httpd_req_delete(hd);
+            }
+            if (ret != ESP_FAIL) {
+                httpd_sess_delete(context.hd, current); 
+            }
+            ESP_LOGD(TAG, LOG_FMT("success"));
+            current->lru_counter = ++hd->lru_counter;
+        }
+        current++;
+    }
     /* Case2: Do we have any incoming connection requests to
      * process? */
     //same as with ctrl msg, if listen_fd has a request
