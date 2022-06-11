@@ -26,12 +26,11 @@ typedef struct {
 } process_session_context_t;
 
 struct httpd_ctrl_data {
-    enum httpd_ctrl_msg {
+    enum httpd_ctrl_type {
         HTTPD_CTRL_SHUTDOWN,
-        HTTPD_CTRL_WORK,
-    } hc_msg;
-    httpd_work_fn_t hc_work;
-    void *hc_work_arg;
+        HTTPD_CTRL_CLOSE,
+    } hc_type;
+    void *hc_arg;
 };
 
 static const char *TAG = "httpd";
@@ -92,9 +91,8 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
                 return ESP_ERR_NOT_FOUND;
             }
             struct httpd_ctrl_data msg = {
-                .hc_msg = HTTPD_CTRL_WORK,
-                .hc_work = httpd_sess_close,
-                .hc_work_arg = lru_session,
+                .hc_type = HTTPD_CTRL_CLOSE,
+                .hc_arg = lru_session,
             };
             ESP_LOGD(TAG, LOG_FMT("sending work ctrl msg"));
             struct sockaddr_in to_addr;
@@ -196,28 +194,6 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
 static int fd_is_valid(int fd)
 {
     return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
-}
-
-esp_err_t httpd_queue_work(httpd_handle_t handle, httpd_work_fn_t work, void *arg)
-{
-    if (handle == NULL || work == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    struct httpd_data *hd = (struct httpd_data *) handle;
-    struct httpd_ctrl_data msg = {
-        .hc_msg = HTTPD_CTRL_WORK,
-        .hc_work = work,
-        .hc_work_arg = arg,
-    };
-
-    int ret = cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg));
-    if (ret < 0) {
-        ESP_LOGW(TAG, LOG_FMT("failed to queue work"));
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
 }
 
 esp_err_t httpd_get_client_list(httpd_handle_t handle, size_t *fds, int *client_fds)
@@ -354,15 +330,13 @@ static esp_err_t httpd_server(struct httpd_data *hd)
             return ESP_FAIL;
         }
 
-        switch (msg.hc_msg) {
-        case HTTPD_CTRL_WORK:
-            if (msg.hc_work) {
-                ESP_LOGD(TAG, LOG_FMT("work"));
-                //the work ctrl message is used for deleting sockets
-                //msg.hc_work is a pointer to a function and msg.hc_work_arg
-                //is the paramter of the function, see httpd_sess_trigger_close_
-                (*msg.hc_work)(msg.hc_work_arg);
-            }
+        switch (msg.hc_type) {
+        case HTTPD_CTRL_CLOSE:
+            ESP_LOGD(TAG, LOG_FMT("work"));
+            //the work ctrl message is used for deleting sockets
+            //msg.hc_work is a pointer to a function and msg.hc_work_arg
+            //is the paramter of the function, see httpd_sess_trigger_close_
+            httpd_sess_close(msg.hc_arg);
             break;
         case HTTPD_CTRL_SHUTDOWN:
             ESP_LOGD(TAG, LOG_FMT("shutdown"));
@@ -597,7 +571,7 @@ esp_err_t httpd_stop(httpd_handle_t handle)
 
     struct httpd_ctrl_data msg;
     memset(&msg, 0, sizeof(msg));
-    msg.hc_msg = HTTPD_CTRL_SHUTDOWN;
+    msg.hc_type = HTTPD_CTRL_SHUTDOWN;
     int ret = 0;
     if ((ret = cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg))) < 0) {
         ESP_LOGE(TAG, "Failed to send shutdown signal err=%d", ret);

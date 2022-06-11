@@ -1469,7 +1469,6 @@ void *httpd_get_global_transport_ctx(httpd_handle_t handle);
  *  - ESP_ERR_NOT_FOUND   : Socket fd not found
  *  - ESP_ERR_INVALID_ARG : Null arguments
  */
-esp_err_t httpd_sess_trigger_close(httpd_handle_t handle, int sockfd);
 
 /**
  * @brief   Update LRU counter for a given socket

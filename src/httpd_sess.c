@@ -483,63 +483,6 @@ esp_err_t httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd)
     return ESP_ERR_NOT_FOUND;
 }
 
-// esp_err_t httpd_sess_close_lru(struct httpd_data *hd)
-// {
-//     struct sock_db *current = hd->hd_sd;
-//     struct sock_db *end = hd->hd_sd + hd->config.max_open_sockets - 1;
-//     long long unsigned int lru_counter = UINT64_MAX;
-//     struct sock_db * lru_session = NULL;
-//     while(current <= end){
-//             if (current->fd == -1) {
-//                 return 0;
-//             }
-//             // Check/update lowest lru
-//             if (current->lru_counter < lru_counter) {
-//                 lru_counter = current->lru_counter;
-//                 lru_session = current;
-//             }
-//             current++;
-//         }
-//     if (!lru_session) {
-//         return ESP_OK;
-//     }
-//     ESP_LOGD(TAG, LOG_FMT("Closing session with fd %d"), lru_session->fd);
-//     lru_session->lru_socket = true;
-//     if (!lru_session) {
-//         return ESP_ERR_NOT_FOUND;
-//     }
-//     // return httpd_queue_work(hd, httpd_sess_close, lru_session);
-//     struct httpd_ctrl_data msg = {
-//         .hc_msg = HTTPD_CTRL_WORK,
-//         .hc_work = httpd_sess_close,
-//         .hc_work_arg = lru_session,
-//     };
-
-//     int ret = cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg));
-//     if (ret < 0) {
-//         ESP_LOGW(TAG, LOG_FMT("failed to queue work"));
-//         return ESP_FAIL;
-//     }
-//     return ESP_OK;
-// }
-
-esp_err_t httpd_sess_trigger_close_(httpd_handle_t handle, struct sock_db *session)
-{
-    if (!session) {
-        return ESP_ERR_NOT_FOUND;
-    }
-    return httpd_queue_work(handle, httpd_sess_close, session);
-}
-
-esp_err_t httpd_sess_trigger_close(httpd_handle_t handle, int sockfd)
-{
-    struct sock_db *session = httpd_sess_get(handle, sockfd);
-    if (!session) {
-        return ESP_ERR_NOT_FOUND;
-    }
-    return httpd_sess_trigger_close_(handle, session);
-}
-
 void httpd_sess_close_all(struct httpd_data *hd)
 {
     enum_context_t context = {
