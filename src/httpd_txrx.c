@@ -69,6 +69,7 @@ static esp_err_t httpd_send_all(httpd_req_t *r, const char *buf, size_t buf_len)
     int ret;
 
     while (buf_len > 0) {
+        ESP_LOGI(TAG, LOG_FMT("%s"), buf);
         ret = ra->sd->send_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0);
         if (ret < 0) {
             ESP_LOGD(TAG, LOG_FMT("error in send_fn"));
@@ -255,6 +256,7 @@ esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     }
 
     /* Sending essential headers */
+    ESP_LOGI(TAG, LOG_FMT("ESSENTIAL HEADERS"));
     if (httpd_send_all(r, ra->scratch, strlen(ra->scratch)) != ESP_OK) {
         return ESP_ERR_HTTPD_RESP_SEND;
     }
@@ -280,11 +282,13 @@ esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     }
 
     /* End header section */
+    ESP_LOGI(TAG, LOG_FMT("END HEADERS"));
     if (httpd_send_all(r, cr_lf_seperator, strlen(cr_lf_seperator)) != ESP_OK) {
         return ESP_ERR_HTTPD_RESP_SEND;
     }
 
     /* Sending content */
+    ESP_LOGI(TAG, LOG_FMT("CONTENT"));
     if (buf && buf_len) {
         if (httpd_send_all(r, buf, buf_len) != ESP_OK) {
             return ESP_ERR_HTTPD_RESP_SEND;

@@ -359,7 +359,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         .hd = hd
     };
     // httpd_sess_enum(hd, httpd_process_session, &context);
-    //loop through sessions in database to see if any
+    //loop through sessions in database to see if any can be read from
     current = hd->hd_sd;
     end = hd->hd_sd + hd->config.max_open_sockets - 1;
     while (current <= end) {
@@ -371,10 +371,11 @@ static esp_err_t httpd_server(struct httpd_data *hd)
                 ESP_LOGD(TAG, LOG_FMT("httpd_req_delete"));
                 ret = httpd_req_delete(hd);
             }
-            if (ret != ESP_FAIL) {
+            if (ret != ESP_OK) {
                 httpd_sess_delete(context.hd, current); 
             }
             ESP_LOGD(TAG, LOG_FMT("success"));
+            //the sess with highest lru_counter is the most recently used
             current->lru_counter = ++hd->lru_counter;
         }
         current++;
@@ -540,7 +541,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
         sock_err = true;
     }
 
-    //msg socket will 
+    //msg socket will be used internally to send mesgs to controll socket
     int msg_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (msg_fd < 0) {
         ESP_LOGE(TAG, LOG_FMT("error in creating msg socket (%d)"), errno);

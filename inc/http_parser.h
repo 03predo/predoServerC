@@ -322,7 +322,7 @@ void http_parser_settings_init(http_parser_settings *settings);
 size_t http_parser_execute(http_parser *parser,
                            const http_parser_settings *settings,
                            const char *data,
-                           size_t len);
+                           size_t len, char * full_req);
 
 
 /* If http_should_keep_alive() in the on_headers_complete or
