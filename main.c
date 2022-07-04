@@ -50,6 +50,8 @@ void app_main(void){
     esp_log_level_set("httpd_sess", ESP_LOG_DEBUG);
     esp_log_level_set("httpd_uri", ESP_LOG_DEBUG);
     //esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
+    //esp_log_level_set("httpd_parser", ESP_LOG_DEBUG);
+
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
