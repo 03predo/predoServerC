@@ -69,7 +69,7 @@ static esp_err_t httpd_send_all(httpd_req_t *r, const char *buf, size_t buf_len)
     int ret;
 
     while (buf_len > 0) {
-        ESP_LOGI(TAG, LOG_FMT("%s"), buf);
+        ESP_LOGD(TAG, LOG_FMT("%s"), buf);
         ret = ra->sd->send_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0);
         if (ret < 0) {
             ESP_LOGD(TAG, LOG_FMT("error in send_fn"));
@@ -86,7 +86,7 @@ static size_t httpd_recv_pending(httpd_req_t *r, char *buf, size_t buf_len)
 {
     struct httpd_req_aux *ra = r->aux;
     size_t offset = sizeof(ra->sd->pending_data) - ra->sd->pending_len;
-    ESP_LOGI(TAG, LOG_FMT("offset: %d"), offset);
+    ESP_LOGD(TAG, LOG_FMT("offset: %d"), offset);
     /* buf_len must not be greater than remaining_len */
     buf_len = MIN(ra->sd->pending_len, buf_len);
     memcpy(buf, ra->sd->pending_data + offset, buf_len);// why are we shifting pending_data forward by the offset, does it fill from back 
@@ -97,14 +97,14 @@ static size_t httpd_recv_pending(httpd_req_t *r, char *buf, size_t buf_len)
 
 int httpd_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_after_pending)
 {
-    ESP_LOGI(TAG, LOG_FMT("requested length = %d"), buf_len);
+    ESP_LOGD(TAG, LOG_FMT("requested length = %d"), buf_len);
 
     size_t pending_len = 0;
     struct httpd_req_aux *ra = r->aux;
 
     /* First fetch pending data from local buffer */
     if (ra->sd->pending_len > 0) {
-        ESP_LOGI(TAG, LOG_FMT("pending length = %d"), ra->sd->pending_len);
+        ESP_LOGD(TAG, LOG_FMT("pending length = %d"), ra->sd->pending_len);
         pending_len = httpd_recv_pending(r, buf, buf_len);
         //move pointer forward to account for pending_data
         buf     += pending_len;
@@ -256,7 +256,6 @@ esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     }
 
     /* Sending essential headers */
-    ESP_LOGI(TAG, LOG_FMT("ESSENTIAL HEADERS"));
     if (httpd_send_all(r, ra->scratch, strlen(ra->scratch)) != ESP_OK) {
         return ESP_ERR_HTTPD_RESP_SEND;
     }
@@ -282,13 +281,11 @@ esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     }
 
     /* End header section */
-    ESP_LOGI(TAG, LOG_FMT("END HEADERS"));
     if (httpd_send_all(r, cr_lf_seperator, strlen(cr_lf_seperator)) != ESP_OK) {
         return ESP_ERR_HTTPD_RESP_SEND;
     }
 
     /* Sending content */
-    ESP_LOGI(TAG, LOG_FMT("CONTENT"));
     if (buf && buf_len) {
         if (httpd_send_all(r, buf, buf_len) != ESP_OK) {
             return ESP_ERR_HTTPD_RESP_SEND;

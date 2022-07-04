@@ -83,11 +83,10 @@ do {                                                                 \
 /* Run the notify callback FOR, returning ER if it fails */
 #define CALLBACK_NOTIFY_(FOR, ER)                                    \
 do {                                                                 \
-  ESP_LOGI(TAG, LOG_FMT("<==CALLBACK NOTIFY==>"));                   \
+  ESP_LOGD(TAG, LOG_FMT("CALLBACK NOTIFY"));                         \
   assert(HTTP_PARSER_ERRNO(parser) == HPE_OK);                       \
                                                                      \
   if (LIKELY(settings->on_##FOR)) {                                  \
-    ESP_LOGI(TAG, LOG_FMT("<==CALLBACK NOTIFY==>"));                 \
     parser->state = CURRENT_STATE();                                 \
     if (UNLIKELY(0 != settings->on_##FOR(parser))) {                 \
       SET_ERRNO(HPE_CB_##FOR);                                       \
@@ -110,7 +109,7 @@ do {                                                                 \
 /* Run data callback FOR with LEN bytes, returning ER if it fails */
 #define CALLBACK_DATA_(FOR, LEN, ER)                                 \
 do {                                                                 \
-  ESP_LOGI(TAG, LOG_FMT("<==CALLBACK DATA==>"));                     \
+  ESP_LOGD(TAG, LOG_FMT("<==CALLBACK DATA==>"));                     \
   assert(HTTP_PARSER_ERRNO(parser) == HPE_OK);                       \
                                                                      \
   if (FOR##_mark) {                                                  \
@@ -477,13 +476,13 @@ do {                                                                 \
 
 static void parser_state(char * state, char ch){
   if (ch == ' '){
-    ESP_LOGI(TAG, LOG_FMT("state = %s, ch = \' \'"), state);
+    ESP_LOGD(TAG, LOG_FMT("state = %s, ch = \' \'"), state);
   }else if(ch == '\r'){
-    ESP_LOGI(TAG, LOG_FMT("state = %s, ch = \\r"), state);
+    ESP_LOGD(TAG, LOG_FMT("state = %s, ch = \\r"), state);
   }else if(ch == '\n'){
-    ESP_LOGI(TAG, LOG_FMT("state = %s, ch = \\n"), state);
+    ESP_LOGD(TAG, LOG_FMT("state = %s, ch = \\n"), state);
   }else{
-    ESP_LOGI(TAG, LOG_FMT("state = %s, ch = %c"), state, ch);
+    ESP_LOGD(TAG, LOG_FMT("state = %s, ch = %c"), state, ch);
   }
 }
 
@@ -700,7 +699,6 @@ size_t http_parser_execute (http_parser *parser,
                             const char *data,
                             size_t len, char * full_req)
 {
-  ESP_LOGI(TAG, LOG_FMT("<==PARSER EXECUTE==>"));
   char ch;
   static int overall_len;
   overall_len += len;
@@ -766,7 +764,7 @@ size_t http_parser_execute (http_parser *parser,
     break;
   }
   const char*  req = data;
-  ESP_LOGI(TAG, LOG_FMT("data:\n%s"), data);
+  ESP_LOGD(TAG, LOG_FMT("data:\n%s"), data);
   
   for (p=data; p != data + len; p++) {
     ch = *p;
@@ -1307,7 +1305,7 @@ reexecute:
       case s_headers_done:
       {
         parser_state("s_headers_done", ch);
-        ESP_LOGI(TAG, LOG_FMT("len: %d, req:\n%s"), overall_len,full_req);
+        ESP_LOGI(TAG, LOG_FMT("\nlen: %d\nreq:\n%s"), overall_len,full_req);
         overall_len = 0;
         int hasBody;
         STRICT_CHECK(ch != LF);
@@ -1409,7 +1407,7 @@ http_method_str (enum http_method m)
 void
 http_parser_init (http_parser *parser, enum http_parser_type t)
 {
-  ESP_LOGI(TAG, LOG_FMT("<==PARSER INIT==>"));
+  ESP_LOGD(TAG, LOG_FMT("PARSER INIT"));
   void *data = parser->data; /* preserve application data */
   memset(parser, 0, sizeof(*parser));
   parser->data = data;

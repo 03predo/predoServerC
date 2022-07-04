@@ -54,7 +54,6 @@ typedef struct {
 
 static esp_err_t verify_url (http_parser *parser)
 {
-    ESP_LOGI(TAG, LOG_FMT("<==VERIFY URL==>"));
     parser_data_t *parser_data  = (parser_data_t *) parser->data;
     struct httpd_req *r         = parser_data->req;
     struct httpd_req_aux *ra    = r->aux;
@@ -109,7 +108,6 @@ static esp_err_t verify_url (http_parser *parser)
 static esp_err_t cb_url(http_parser *parser,
                         const char *at, size_t length)
 {
-    ESP_LOGI(TAG, LOG_FMT("cb_url"));
     parser_data_t *parser_data = (parser_data_t *) parser->data;
     struct httpd_req *r         = parser_data->req;
 
@@ -127,7 +125,7 @@ static esp_err_t cb_url(http_parser *parser,
         return ESP_FAIL;
     }
 
-    ESP_LOGD(TAG, LOG_FMT("processing url = %.*s"), length, at);
+    ESP_LOGI(TAG, LOG_FMT("processing url = %.*s"), length, at);
 
     /* Update length of URL string */
     if ((parser_data->last.length += length) > HTTPD_MAX_URI_LEN) {
@@ -137,7 +135,6 @@ static esp_err_t cb_url(http_parser *parser,
         parser_data->status = PARSING_FAILED;
         return ESP_FAIL;
     }
-    ESP_LOGI(TAG, LOG_FMT("uri: %s"), r->uri);
     return ESP_OK;
 }
 
@@ -205,7 +202,7 @@ static esp_err_t cb_header_field(http_parser *parser, const char *at, size_t len
 
     /* Check previous status */
     if (parser_data->status == PARSING_URL) {
-        ESP_LOGI(TAG, LOG_FMT("PARSING URL"));
+        ESP_LOGD(TAG, LOG_FMT("PARSING URL"));
         if (verify_url(parser) != ESP_OK) {
             /* verify_url would already have set the
              * error field of parser data, so only setting
@@ -228,7 +225,6 @@ static esp_err_t cb_header_field(http_parser *parser, const char *at, size_t len
             return ESP_FAIL;
         }
     } else if (parser_data->status == PARSING_HDR_VALUE) {
-        ESP_LOGI(TAG, LOG_FMT("PARSING HDR VALUE"));
         /* Overwrite terminator (carriage returns(CR) or line finishes(LF))following last header
          * (key: value) pair with null characters */
         char *term_start = (char *)parser_data->last.at + parser_data->last.length;
@@ -242,14 +238,14 @@ static esp_err_t cb_header_field(http_parser *parser, const char *at, size_t len
         /* Increment header count */
         ra->req_hdrs_count++;
     } else if (parser_data->status != PARSING_HDR_FIELD) {
-        ESP_LOGI(TAG, LOG_FMT("NOT PARSING HDR FIELD"));
+        ESP_LOGD(TAG, LOG_FMT("NOT PARSING HDR FIELD"));
         ESP_LOGE(TAG, LOG_FMT("unexpected state transition"));
         parser_data->error = HTTPD_500_INTERNAL_SERVER_ERROR;
         parser_data->status = PARSING_FAILED;
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, LOG_FMT("processing field = %.*s"), length, at);
+    ESP_LOGD(TAG, LOG_FMT("processing field = %.*s"), length, at);
 
     /* Update length of header string */
     parser_data->last.length += length;
@@ -293,7 +289,7 @@ static esp_err_t cb_header_value(http_parser *parser, const char *at, size_t len
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, LOG_FMT("processing value = %.*s"), length, at);
+    ESP_LOGD(TAG, LOG_FMT("processing value = %.*s"), length, at);
 
     /* Update length of header string */
     parser_data->last.length += length;
@@ -518,13 +514,13 @@ static int read_block(httpd_req_t *req, size_t offset, size_t length)
          * be valid anymore */
         return HTTPD_SOCK_ERR_FAIL;
     } else if (nbytes == 0) {
-        ESP_LOGI(TAG, LOG_FMT("connection closed"));
+        ESP_LOGD(TAG, LOG_FMT("connection closed"));
         /* Connection closed by client so no
          * need to send error response */
         return HTTPD_SOCK_ERR_FAIL;
     }
 
-    ESP_LOGI(TAG, LOG_FMT("received HTTP request block size = %d"), nbytes);
+    ESP_LOGD(TAG, LOG_FMT("received HTTP request block size = %d"), nbytes);
     return nbytes;
 }
 
@@ -637,7 +633,6 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
 
     /* Set offset to start of scratch buffer */
     offset = 0;
-    int cycle_no = 0;
     int full_block = 0;
     do {
         /* Read block into scratch buffer */
@@ -665,8 +660,6 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
              * invoke error handler */
             return httpd_req_handle_err(r, parser_data.error);
         }
-        ESP_LOGI(TAG, LOG_FMT("READ/PARSE CYCLE %d"), cycle_no);
-        ++cycle_no;
     } while (parser_data.status != PARSING_COMPLETE);
 
     ESP_LOGD(TAG, LOG_FMT("parsing complete"));
