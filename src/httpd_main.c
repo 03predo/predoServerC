@@ -354,16 +354,12 @@ static esp_err_t httpd_server(struct httpd_data *hd)
 
     /* Case1: Do we have any activity on the current data
      * sessions? */
-    process_session_context_t context = {
-        .fdset = &read_set,
-        .hd = hd
-    };
-    // httpd_sess_enum(hd, httpd_process_session, &context);
+    //httpd_sess_enum(hd, httpd_process_session, &context);
     //loop through sessions in database to see if any can be read from
     current = hd->hd_sd;
     end = hd->hd_sd + hd->config.max_open_sockets - 1;
     while (current <= end) {
-        if (!(current->fd < 0) && FD_ISSET(current->fd, context.fdset)) {
+        if (!(current->fd < 0) && FD_ISSET(current->fd, &read_set)) {
             ESP_LOGD(TAG, LOG_FMT("processing socket %d"), current->fd);
             ESP_LOGD(TAG, LOG_FMT("httpd_req_new"));
             esp_err_t ret = httpd_req_new(hd, current);
@@ -372,7 +368,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
                 ret = httpd_req_delete(hd);
             }
             if (ret != ESP_OK) {
-                httpd_sess_delete(context.hd, current); 
+                httpd_sess_delete(hd, current); 
             }
             ESP_LOGD(TAG, LOG_FMT("success"));
             //the sess with highest lru_counter is the most recently used

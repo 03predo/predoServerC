@@ -20,7 +20,7 @@ static esp_err_t predo_get_handler(httpd_req_t *req){
 
     httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
     lcd_init();
-    lcd_send_string("GET REQUEST");
+    lcd_send_string("GET /predoServer");
     return ESP_OK;
 }
 
@@ -49,8 +49,8 @@ void app_main(void){
     esp_log_level_set("httpd", ESP_LOG_DEBUG);
     esp_log_level_set("httpd_sess", ESP_LOG_DEBUG);
     esp_log_level_set("httpd_uri", ESP_LOG_DEBUG);
-    //esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
-    //esp_log_level_set("httpd_parser", ESP_LOG_DEBUG);
+    esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
+    esp_log_level_set("httpd_parser", ESP_LOG_DEBUG);
 
 
     esp_err_t ret = nvs_flash_init();
@@ -120,9 +120,6 @@ void app_main(void){
     memset(buf, 0, sizeof(buf));
     fread(buf, 1, sizeof(buf), f);
     fclose(f);
-
-    char http_header[1024] = "HTTP/1.1 200 OK\r\n\n";
-    strcat(http_header, buf);
 
     //create http_data object
     httpd_handle_t server = NULL;

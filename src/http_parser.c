@@ -109,7 +109,7 @@ do {                                                                 \
 /* Run data callback FOR with LEN bytes, returning ER if it fails */
 #define CALLBACK_DATA_(FOR, LEN, ER)                                 \
 do {                                                                 \
-  ESP_LOGD(TAG, LOG_FMT("<==CALLBACK DATA==>"));                     \
+  ESP_LOGD(TAG, LOG_FMT("CALLBACK DATA"));                           \
   assert(HTTP_PARSER_ERRNO(parser) == HPE_OK);                       \
                                                                      \
   if (FOR##_mark) {                                                  \
@@ -251,40 +251,40 @@ static char * valid = "!#$%%&\'*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdef
 # define T(v) v
 #endif
 
-
-static const uint8_t normal_url_char[32] = {
-/*   0 nul    1 soh    2 stx    3 etx    4 eot    5 enq    6 ack    7 bel  */
-        0    |   0    |   0    |   0    |   0    |   0    |   0    |   0,
-/*   8 bs     9 ht    10 nl    11 vt    12 np    13 cr    14 so    15 si   */
-        0    | T(2)   |   0    |   0    | T(16)  |   0    |   0    |   0,
-/*  16 dle   17 dc1   18 dc2   19 dc3   20 dc4   21 nak   22 syn   23 etb */
-        0    |   0    |   0    |   0    |   0    |   0    |   0    |   0,
-/*  24 can   25 em    26 sub   27 esc   28 fs    29 gs    30 rs    31 us  */
-        0    |   0    |   0    |   0    |   0    |   0    |   0    |   0,
-/*  32 sp    33  !    34  "    35  #    36  $    37  %    38  &    39  '  */
-        0    |   2    |   4    |   0    |   16   |   32   |   64   |  128,
-/*  40  (    41  )    42  *    43  +    44  ,    45  -    46  .    47  /  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/*  48  0    49  1    50  2    51  3    52  4    53  5    54  6    55  7  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/*  56  8    57  9    58  :    59  ;    60  <    61  =    62  >    63  ?  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |   0,
-/*  64  @    65  A    66  B    67  C    68  D    69  E    70  F    71  G  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/*  72  H    73  I    74  J    75  K    76  L    77  M    78  N    79  O  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/*  80  P    81  Q    82  R    83  S    84  T    85  U    86  V    87  W  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/*  88  X    89  Y    90  Z    91  [    92  \    93  ]    94  ^    95  _  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/*  96  `    97  a    98  b    99  c   100  d   101  e   102  f   103  g  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/* 104  h   105  i   106  j   107  k   108  l   109  m   110  n   111  o  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/* 112  p   113  q   114  r   115  s   116  t   117  u   118  v   119  w  */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
-/* 120  x   121  y   122  z   123  {   124  |   125  }   126  ~   127 del */
-        1    |   2    |   4    |   8    |   16   |   32   |   64   |   0, };
+static char * valid_url = "!\"$%%&\'()*+,-./0123456789:;<=>1@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+// static const uint8_t normal_url_char[32] = {
+// /*   0 nul    1 soh    2 stx    3 etx    4 eot    5 enq    6 ack    7 bel  */
+//         0    |   0    |   0    |   0    |   0    |   0    |   0    |   0,
+// /*   8 bs     9 ht    10 nl    11 vt    12 np    13 cr    14 so    15 si   */
+//         0    | T(2)   |   0    |   0    | T(16)  |   0    |   0    |   0,
+// /*  16 dle   17 dc1   18 dc2   19 dc3   20 dc4   21 nak   22 syn   23 etb */
+//         0    |   0    |   0    |   0    |   0    |   0    |   0    |   0,
+// /*  24 can   25 em    26 sub   27 esc   28 fs    29 gs    30 rs    31 us  */
+//         0    |   0    |   0    |   0    |   0    |   0    |   0    |   0,
+// /*  32 sp    33  !    34  "    35  #    36  $    37  %    38  &    39  '  */
+//         0    |   2    |   4    |   0    |   16   |   32   |   64   |  128,
+// /*  40  (    41  )    42  *    43  +    44  ,    45  -    46  .    47  /  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /*  48  0    49  1    50  2    51  3    52  4    53  5    54  6    55  7  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /*  56  8    57  9    58  :    59  ;    60  <    61  =    62  >    63  ?  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |   0,
+// /*  64  @    65  A    66  B    67  C    68  D    69  E    70  F    71  G  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /*  72  H    73  I    74  J    75  K    76  L    77  M    78  N    79  O  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /*  80  P    81  Q    82  R    83  S    84  T    85  U    86  V    87  W  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /*  88  X    89  Y    90  Z    91  [    92  \    93  ]    94  ^    95  _  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /*  96  `    97  a    98  b    99  c   100  d   101  e   102  f   103  g  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /* 104  h   105  i   106  j   107  k   108  l   109  m   110  n   111  o  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /* 112  p   113  q   114  r   115  s   116  t   117  u   118  v   119  w  */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |  128,
+// /* 120  x   121  y   122  z   123  {   124  |   125  }   126  ~   127 del */
+//         1    |   2    |   4    |   8    |   16   |   32   |   64   |   0, };
 
 #undef T
 
@@ -515,145 +515,20 @@ parse_url_char(enum state s, const char ch)
   if (ch == ' ' || ch == '\r' || ch == '\n') {
     return s_dead;
   }
-
-#if HTTP_PARSER_STRICT
-  if (ch == '\t' || ch == '\f') {
-    return s_dead;
-  }
-#endif
-
   switch (s) {
     case s_req_spaces_before_url:
-      /* Proxied requests are followed by scheme of an absolute URI (alpha).
-       * All methods except CONNECT are followed by '/' or '*'.
-       */
-
       if (ch == '/' || ch == '*') {
         return s_req_path;
       }
-
-      if (IS_ALPHA(ch)) {
-        return s_req_schema;
-      }
-
       break;
-
-    case s_req_schema:
-      if (IS_ALPHA(ch)) {
-        return s;
-      }
-
-      if (ch == ':') {
-        return s_req_schema_slash;
-      }
-
-      break;
-
-    case s_req_schema_slash:
-      if (ch == '/') {
-        return s_req_schema_slash_slash;
-      }
-
-      break;
-
-    case s_req_schema_slash_slash:
-      if (ch == '/') {
-        return s_req_server_start;
-      }
-
-      break;
-
-    case s_req_server_with_at:
-      if (ch == '@') {
-        return s_dead;
-      }
-
-    /* FALLTHROUGH */
-    case s_req_server_start:
-    case s_req_server:
-      if (ch == '/') {
-        return s_req_path;
-      }
-
-      if (ch == '?') {
-        return s_req_query_string_start;
-      }
-
-      if (ch == '@') {
-        return s_req_server_with_at;
-      }
-
-      if (IS_USERINFO_CHAR(ch) || ch == '[' || ch == ']') {
-        return s_req_server;
-      }
-
-      break;
-
     case s_req_path:
-      if (IS_URL_CHAR(ch)) {
+      if (memchr(valid_url, ch, 95) != NULL) {
         return s;
       }
-
-      switch (ch) {
-        case '?':
-          return s_req_query_string_start;
-
-        case '#':
-          return s_req_fragment_start;
-      }
-
       break;
-
-    case s_req_query_string_start:
-    case s_req_query_string:
-      if (IS_URL_CHAR(ch)) {
-        return s_req_query_string;
-      }
-
-      switch (ch) {
-        case '?':
-          /* allow extra '?' in query string */
-          return s_req_query_string;
-
-        case '#':
-          return s_req_fragment_start;
-      }
-
-      break;
-
-    case s_req_fragment_start:
-      if (IS_URL_CHAR(ch)) {
-        return s_req_fragment;
-      }
-
-      switch (ch) {
-        case '?':
-          return s_req_fragment;
-
-        case '#':
-          return s;
-      }
-
-      break;
-
-    case s_req_fragment:
-      if (IS_URL_CHAR(ch)) {
-        return s;
-      }
-
-      switch (ch) {
-        case '?':
-        case '#':
-          return s;
-      }
-
-      break;
-
     default:
       break;
   }
-
-  /* We should never fall out of the switch above unless there's an error */
   return s_dead;
 }
 
@@ -750,6 +625,7 @@ reexecute:
           case ' ':
             p_state = (enum state) s_req_http_start;
             parser->state = p_state;
+            
             if (0 != settings->on_url(parser, url_mark, p - url_mark)) parser->http_errno = HPE_CB_url;
             if (parser->http_errno != HPE_OK) return (p - data + 1);
             url_mark = NULL;
@@ -1004,10 +880,11 @@ reexecute:
       }
       case s_header_value:
       {
-        parser_state("s_header_value", ch);
+        //parser_state("s_header_value", ch);
         const char* start = p;
         enum header_states h_state = (enum header_states) parser->header_state;
         for (; p != data + len; p++) {
+          parser_state("s_header_value", ch);
           ch = *p;
           if (ch == CR) {
             strncat(full_req, header_value_mark, p-header_value_mark+1);
@@ -1015,6 +892,7 @@ reexecute:
             strncat(full_req, &nl, 1);
             p_state = (enum state) s_header_almost_done;
             parser->header_state = h_state;
+            ESP_LOGI(TAG, "header_field_mark CR: %c", *header_value_mark);
             CALLBACK_DATA(header_value);
             break;
           }
@@ -1026,6 +904,7 @@ reexecute:
             p_state = (enum state) s_header_almost_done;
             COUNT_HEADER_SIZE(p - start);
             parser->header_state = h_state;
+            ESP_LOGI(TAG, "header_field_mark LF: %c", *header_value_mark);
             CALLBACK_DATA_NOADVANCE(header_value);
             REEXECUTE();
           }
@@ -1456,39 +1335,9 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
     switch (s) {
       case s_dead:
         return 1;
-
-      /* Skip delimeters */
-      case s_req_schema_slash:
-      case s_req_schema_slash_slash:
-      case s_req_server_start:
-      case s_req_query_string_start:
-      case s_req_fragment_start:
-        continue;
-
-      case s_req_schema:
-        uf = UF_SCHEMA;
-        break;
-
-      case s_req_server_with_at:
-        found_at = 1;
-
-        /* falls through */
-      case s_req_server:
-        uf = UF_HOST;
-        break;
-
       case s_req_path:
         uf = UF_PATH;
         break;
-
-      case s_req_query_string:
-        uf = UF_QUERY;
-        break;
-
-      case s_req_fragment:
-        uf = UF_FRAGMENT;
-        break;
-
       default:
         assert(!"Unexpected state");
         return 1;
@@ -1499,42 +1348,10 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
       u->field_data[uf].len++;
       continue;
     }
-
     u->field_data[uf].off = p - buf;
     u->field_data[uf].len = 1;
-
     u->field_set |= (1 << uf);
     old_uf = uf;
-  }
-
-  /* host must be present if there is a schema */
-  /* parsing http:///toto will fail */
-  if ((u->field_set & (1 << UF_SCHEMA)) &&
-      (u->field_set & (1 << UF_HOST)) == 0) {
-    return 1;
-  }
-
-  if (u->field_set & (1 << UF_HOST)) {
-    if (http_parse_host(buf, u, found_at) != 0) {
-      return 1;
-    }
-  }
-
-  /* CONNECT requests can only contain "hostname:port" */
-  if (is_connect && u->field_set != ((1 << UF_HOST)|(1 << UF_PORT))) {
-    return 1;
-  }
-
-  if (u->field_set & (1 << UF_PORT)) {
-    /* Don't bother with endp; we've already validated the string */
-    unsigned long v = strtoul(buf + u->field_data[UF_PORT].off, NULL, 10);
-
-    /* Ports have a max value of 2^16 */
-    if (v > 0xffff) {
-      return 1;
-    }
-
-    u->port = (uint16_t) v;
   }
 
   return 0;
