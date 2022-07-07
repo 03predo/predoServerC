@@ -425,7 +425,7 @@ int httpd_send(httpd_req_t *req, const char *buf, size_t buf_len);
  *  - Length of data : if successful
  *  - ESP_FAIL       : if failed
  */
-int httpd_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_after_pending);
+int http_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_after_pending);
 
 /**
  * @brief   For un-receiving HTTP request data

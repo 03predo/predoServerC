@@ -623,3 +623,103 @@ esp_err_t httpd_stop(httpd_handle_t handle)
     ESP_LOGI(TAG, LOG_FMT("Server Stopped"));
     return ESP_OK;
 }
+
+static esp_err_t httpd_send_all(httpd_req_t *r, const char *buf, size_t buf_len)
+{
+    struct httpd_req_aux *ra = r->aux;
+    int ret;
+
+    while (buf_len > 0) {
+        ESP_LOGD(TAG, LOG_FMT("%s"), buf);
+        ret = ra->sd->send_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0);
+        if (ret < 0) {
+            ESP_LOGD(TAG, LOG_FMT("error in send_fn"));
+            return ESP_FAIL;
+        }
+        ESP_LOGD(TAG, LOG_FMT("sent = %d"), ret);
+        buf     += ret;
+        buf_len -= ret;
+    }
+    return ESP_OK;
+}
+
+esp_err_t http_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
+{
+    if (r == NULL) return ESP_ERR_INVALID_ARG;
+    if (!httpd_valid_req(r)) return ESP_ERR_HTTPD_INVALID_REQ;
+
+    struct httpd_req_aux *ra = r->aux;
+    const char *httpd_hdr_str = "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n";
+    const char *cr_lf_seperator = "\r\n";
+    
+    if (buf_len == HTTPD_RESP_USE_STRLEN) buf_len = strlen(buf);
+    ra->req_hdrs_count = 0;
+    if (snprintf(ra->scratch, sizeof(ra->scratch), httpd_hdr_str,
+                 ra->status, ra->content_type, buf_len) >= sizeof(ra->scratch)) return ESP_ERR_HTTPD_RESP_HDR;
+
+    ESP_LOGD(TAG, LOG_FMT("ra->scratch:\n%s"), ra->scratch);
+    if (httpd_send_all(r, ra->scratch, strlen(ra->scratch)) != ESP_OK) return ESP_ERR_HTTPD_RESP_SEND;
+    if (httpd_send_all(r, cr_lf_seperator, strlen(cr_lf_seperator)) != ESP_OK) return ESP_ERR_HTTPD_RESP_SEND;
+    if (buf && buf_len) {
+        if (httpd_send_all(r, buf, buf_len) != ESP_OK) return ESP_ERR_HTTPD_RESP_SEND;
+    }
+    return ESP_OK;
+}
+
+static size_t httpd_recv_pending(httpd_req_t *r, char *buf, size_t buf_len)
+{
+    struct httpd_req_aux *ra = r->aux;
+    size_t offset = sizeof(ra->sd->pending_data) - ra->sd->pending_len;
+    ESP_LOGD(TAG, LOG_FMT("offset: %d"), offset);
+    /* buf_len must not be greater than remaining_len */
+    buf_len = MIN(ra->sd->pending_len, buf_len);
+    memcpy(buf, ra->sd->pending_data + offset, buf_len);// why are we shifting pending_data forward by the offset, does it fill from back 
+
+    ra->sd->pending_len -= buf_len;
+    return buf_len;
+}
+
+int http_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_after_pending)
+{
+    ESP_LOGD(TAG, LOG_FMT("requested length = %d"), buf_len);
+
+    size_t pending_len = 0;
+    struct httpd_req_aux *ra = r->aux;
+
+    /* First fetch pending data from local buffer */
+    if (ra->sd->pending_len > 0) {
+        ESP_LOGD(TAG, LOG_FMT("pending length = %d"), ra->sd->pending_len);
+        pending_len = httpd_recv_pending(r, buf, buf_len);
+        //move pointer forward to account for pending_data
+        buf     += pending_len;
+        //adjust remaining parser block space left for remaining data
+        buf_len -= pending_len;
+
+        /* If buffer filled then no need to recv.
+         * If asked to halt after receiving pending data then
+         * return with received length */
+        if (!buf_len || halt_after_pending) {
+            return pending_len;
+        }
+    }
+
+    /* Receive data of remaining length */
+    int ret = ra->sd->recv_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0); //httpd_default_recv, returns number of bytes received
+    if (ret < 0) {
+        ESP_LOGD(TAG, LOG_FMT("error in recv_fn"));
+        if ((ret == HTTPD_SOCK_ERR_TIMEOUT) && (pending_len != 0)) {
+            /* If recv() timeout occurred, but pending data is
+             * present, return length of pending data.
+             * This behavior is similar to that of socket recv()
+             * function, which, in case has only partially read the
+             * requested length, due to timeout, returns with read
+             * length, rather than error */
+            return pending_len;
+        }
+        return ret;
+    }
+
+    ESP_LOGD(TAG, LOG_FMT("received length = %d"), ret + pending_len);
+    return ret + pending_len; // amount that the 128 byte block is filled
+}
+

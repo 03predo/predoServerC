@@ -141,7 +141,7 @@ static esp_err_t pause_parsing(http_parser *parser, const char* at)
     }
 
     /* Push back the un-parsed data into pending buffer for
-     * receiving again with httpd_recv_with_opt() later when
+     * receiving again with http_recv_with_opt() later when
      * read_block() executes */
     if (unparsed && (unparsed != httpd_unrecv(r, at, unparsed))) {
         ESP_LOGE(TAG, LOG_FMT("data too large for un-recv = %d"), unparsed);
@@ -364,7 +364,7 @@ static int read_block(httpd_req_t *req, size_t offset, size_t length)
     /* Receive data into buffer. If data is pending (from unrecv) then return
      * immediately after receiving pending data, as pending data may just complete
      * this request packet. */
-    int nbytes = httpd_recv_with_opt(req, raux->scratch + offset, buf_len, true);
+    int nbytes = http_recv_with_opt(req, raux->scratch + offset, buf_len, true);
     if (nbytes < 0) {
         ESP_LOGD(TAG, LOG_FMT("error in httpd_recv"));
         /* If timeout occurred allow the

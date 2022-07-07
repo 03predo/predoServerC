@@ -1023,7 +1023,7 @@ bool httpd_uri_match_wildcard(const char *uri_template, const char *uri_to_match
  *  - ESP_ERR_HTTPD_RESP_SEND   : Error in raw send
  *  - ESP_ERR_HTTPD_INVALID_REQ : Invalid request
  */
-esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len);
+esp_err_t http_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len);
 
 /**
  * @brief   API to send one HTTP chunk
@@ -1082,7 +1082,7 @@ esp_err_t httpd_resp_send_chunk(httpd_req_t *r, const char *buf, ssize_t buf_len
  *  - ESP_ERR_HTTPD_INVALID_REQ : Invalid request
  */
 static inline esp_err_t httpd_resp_sendstr(httpd_req_t *r, const char *str) {
-    return httpd_resp_send(r, str, (str == NULL) ? 0 : HTTPD_RESP_USE_STRLEN);
+    return http_resp_send(r, str, (str == NULL) ? 0 : HTTPD_RESP_USE_STRLEN);
 }
 
 /**

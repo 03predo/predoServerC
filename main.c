@@ -18,7 +18,7 @@ static httpd_uri_t predoFavicon = {
 
 static esp_err_t predo_get_handler(httpd_req_t *req){
 
-    httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
+    http_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
     lcd_init();
     lcd_send_string("GET /predoServer");
     return ESP_OK;
@@ -32,7 +32,7 @@ static httpd_uri_t predoServer = {
 };
 
 static esp_err_t predo_server_stop(httpd_req_t *req){
-    httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
+    http_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
     server_on = false;
     return ESP_OK;
 }
