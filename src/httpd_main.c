@@ -66,7 +66,7 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
             current++;
         }
         if (!free_sess) {
-            ESP_LOGD(TAG, LOG_FMT("no free sessions, closing least recently used"));
+            ESP_LOGI(TAG, LOG_FMT("no free sessions, closing least recently used"));
             current = hd->hd_sd;
             end = hd->hd_sd + hd->config.max_open_sockets - 1;
             long long unsigned int lru_counter = UINT64_MAX;
@@ -107,7 +107,7 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
             ESP_LOGD(TAG, LOG_FMT("ctrl close msg sent"));
             return ESP_OK;
         }
-        ESP_LOGD(TAG, LOG_FMT("session available, starting to accept"));
+        ESP_LOGI(TAG, LOG_FMT("session available, starting to accept"));
     }
 
     struct sockaddr_in addr_from;
@@ -119,7 +119,7 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
         ESP_LOGW(TAG, LOG_FMT("error in accept (%d)"), errno);
         return ESP_FAIL;
     }
-    ESP_LOGD(TAG, LOG_FMT("accepted new fd = %d"), new_fd);
+    ESP_LOGI(TAG, LOG_FMT("accepted new fd = %d"), new_fd);
 
     struct timeval tv;
     //set recv timeout of this fd as per config, how much time 
@@ -181,10 +181,10 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
     session->recv_fn = httpd_default_recv;
 
 
-    ESP_LOGD(TAG, LOG_FMT("fd %d connection complete"), session->fd);
+    ESP_LOGI(TAG, LOG_FMT("fd %d connection complete"), session->fd);
     // increment number of sessions
     hd->hd_sd_active_count++;
-    ESP_LOGD(TAG, LOG_FMT("active sockets: %d"), hd->hd_sd_active_count);
+    ESP_LOGI(TAG, LOG_FMT("active sockets: %d"), hd->hd_sd_active_count);
     SevSegInt(hd->hd_sd_active_count);
 
     
@@ -292,8 +292,8 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     max_fd = maxfd;
     maxfd = MAX(hd->ctrl_fd, max_fd);
 
-    ESP_LOGD(TAG, LOG_FMT("doing select maxfd+1 = %d"), maxfd + 1);
-    //select goes through the first (maxfd + 1) fds in read_set to see
+    ESP_LOGI(TAG, LOG_FMT("doing select maxfd+1 = %d"), maxfd + 1);
+    //select goes through the first maxfd fds in read_set to see
     //if they are ready to be read from, and returns the amount of ready sockets
     //it also modifies read_set to only contain the fds that are ready to read from
     int active_cnt = select(maxfd + 1, &read_set, NULL, NULL, NULL);
@@ -316,7 +316,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     //if ctrl_fd has a message, it will have stayed in read_set after select()
     //FD_ISSET returns true if the fd is in the set and false otherwise
     if (FD_ISSET(hd->ctrl_fd, &read_set)) {
-        ESP_LOGD(TAG, LOG_FMT("processing ctrl message"));
+        ESP_LOGI(TAG, LOG_FMT("processing ctrl message"));
         struct httpd_ctrl_data msg;
         //recv will take in the data on ctrl_fd into the buffer msg
         //it returns the length of the message
@@ -360,19 +360,22 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     end = hd->hd_sd + hd->config.max_open_sockets - 1;
     while (current <= end) {
         if (!(current->fd < 0) && FD_ISSET(current->fd, &read_set)) {
-            ESP_LOGD(TAG, LOG_FMT("processing socket %d"), current->fd);
-            ESP_LOGD(TAG, LOG_FMT("httpd_req_new"));
+            ESP_LOGI(TAG, LOG_FMT("processing new request on socket %d"), current->fd);
             esp_err_t ret = httpd_req_new(hd, current);
             if(ret == ESP_OK){
-                ESP_LOGD(TAG, LOG_FMT("httpd_req_delete"));
-                ret = httpd_req_delete(hd);
-            }
-            if (ret != ESP_OK) {
+                if(httpd_req_delete(hd)!= ESP_OK){
+                    ESP_LOGW(TAG, LOG_FMT("request delete failed, deleting session"));
+                    httpd_sess_delete(hd, current); 
+                }else{
+                    ESP_LOGI(TAG, LOG_FMT("deleted request"));
+                }
+            }else{
+                ESP_LOGI(TAG, LOG_FMT("deleting session"));
                 httpd_sess_delete(hd, current); 
             }
-            ESP_LOGD(TAG, LOG_FMT("success"));
             //the sess with highest lru_counter is the most recently used
             current->lru_counter = ++hd->lru_counter;
+            ESP_LOGD(TAG, LOG_FMT("fd: %d, lru_counter: %llu"), current->fd, current->lru_counter);
         }
         current++;
     }
@@ -657,12 +660,13 @@ esp_err_t http_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     if (snprintf(ra->scratch, sizeof(ra->scratch), httpd_hdr_str,
                  ra->status, ra->content_type, buf_len) >= sizeof(ra->scratch)) return ESP_ERR_HTTPD_RESP_HDR;
 
-    ESP_LOGD(TAG, LOG_FMT("ra->scratch:\n%s"), ra->scratch);
+    ESP_LOGD(TAG, LOG_FMT("sending response headers\n%s%s"), ra->scratch, buf);
     if (httpd_send_all(r, ra->scratch, strlen(ra->scratch)) != ESP_OK) return ESP_ERR_HTTPD_RESP_SEND;
     if (httpd_send_all(r, cr_lf_seperator, strlen(cr_lf_seperator)) != ESP_OK) return ESP_ERR_HTTPD_RESP_SEND;
     if (buf && buf_len) {
         if (httpd_send_all(r, buf, buf_len) != ESP_OK) return ESP_ERR_HTTPD_RESP_SEND;
     }
+    ESP_LOGI(TAG, LOG_FMT("response headers sent"));
     return ESP_OK;
 }
 

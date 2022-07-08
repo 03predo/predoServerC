@@ -892,7 +892,6 @@ reexecute:
             strncat(full_req, &nl, 1);
             p_state = (enum state) s_header_almost_done;
             parser->header_state = h_state;
-            ESP_LOGI(TAG, "header_field_mark CR: %c", *header_value_mark);
             CALLBACK_DATA(header_value);
             break;
           }
@@ -1038,7 +1037,7 @@ reexecute:
       case s_headers_done:
       {
         parser_state("s_headers_done", ch);
-        ESP_LOGI(TAG, LOG_FMT("\nlen: %d\nreq:\n%s"), overall_len,full_req);
+        ESP_LOGI(TAG, LOG_FMT("parsed request of length %d\n\n%s"), overall_len, full_req);
         overall_len = 0;
         STRICT_CHECK(ch != LF);
         //UPDATE_STATE(NEW_MESSAGE());

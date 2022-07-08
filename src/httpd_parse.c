@@ -115,7 +115,7 @@ static esp_err_t cb_url(http_parser *parser,
         parser_data->status = PARSING_FAILED;
         return ESP_FAIL;
     }
-    ESP_LOGI(TAG, LOG_FMT("processing url = %.*s"), length, at);
+    ESP_LOGD(TAG, LOG_FMT("processing url = %.*s"), length, at);
     if ((parser_data->last.length += length) > HTTPD_MAX_URI_LEN) {
         ESP_LOGW(TAG, LOG_FMT("URI length (%d) greater than supported (%d)"),
                  parser_data->last.length, HTTPD_MAX_URI_LEN);

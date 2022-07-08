@@ -401,7 +401,7 @@ void httpd_sess_delete(struct httpd_data *hd, struct sock_db *session)
         return;
     }
 
-    ESP_LOGD(TAG, LOG_FMT("fd = %d"), session->fd);
+    ESP_LOGI(TAG, LOG_FMT("deleting session on fd %d"), session->fd);
 
     // Call close function if defined
     if (hd->config.close_fn) {
