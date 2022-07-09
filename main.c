@@ -147,7 +147,7 @@ void app_main(void){
         ESP_LOGD(TAG, "Stopping in %d seconds", k);
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
-    httpd_stop(server);
+    http_stop(server);
     lcd_put_cur(0,0);
     lcd_send_string("SERVER STOPPED");
     return ;

@@ -14,7 +14,7 @@
 
 
 #include "PredoHttpServer.h"
-#include "esp_httpd_priv.h"
+#include "esp_http_priv.h"
 #include "ctrl_sock.h"
 #include "SevSeg.h"
 
@@ -34,22 +34,6 @@ struct httpd_ctrl_data {
 };
 
 static const char *TAG = "httpd";
-
-// static void httpd_sess_close(void *arg)
-// {
-//     struct sock_db *sock_db = (struct sock_db *) arg;
-//     if (!sock_db) {
-//         return;
-//     }
-
-//     if (!sock_db->lru_counter && !sock_db->lru_socket) {
-//         ESP_LOGD(TAG, "Skipping session close for %d as it seems to be a race condition", sock_db->fd);
-//         return;
-//     }
-//     sock_db->lru_socket = false;
-//     struct httpd_data *hd = (struct httpd_data *) sock_db->handle;
-//     httpd_sess_delete(hd, sock_db);
-// }
 
 static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
 {
@@ -196,59 +180,6 @@ static int fd_is_valid(int fd)
     return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
 }
 
-esp_err_t httpd_get_client_list(httpd_handle_t handle, size_t *fds, int *client_fds)
-{
-    struct httpd_data *hd = (struct httpd_data *) handle;
-    if (hd == NULL || fds == NULL || *fds == 0 || client_fds == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    size_t max_fds = *fds;
-    *fds = 0;
-    for (int i = 0; i < hd->config.max_open_sockets; ++i) {
-        if (hd->hd_sd[i].fd != -1) {
-            if (*fds < max_fds) {
-                client_fds[(*fds)++] = hd->hd_sd[i].fd;
-            } else {
-                return ESP_ERR_INVALID_ARG;
-            }
-        }
-    }
-    return ESP_OK;
-}
-
-void *httpd_get_global_user_ctx(httpd_handle_t handle)
-{
-    return ((struct httpd_data *)handle)->config.global_user_ctx;
-}
-
-void *httpd_get_global_transport_ctx(httpd_handle_t handle)
-{
-    return ((struct httpd_data *)handle)->config.global_transport_ctx;
-}
-
-// Called for each session from httpd_server
-static int httpd_process_session(struct sock_db *session, void *context)
-{
-    if ((!session) || (!context)) {
-        return 0;
-    }
-
-    if (session->fd < 0) {
-        return 1;
-    }
-
-    process_session_context_t *ctx = (process_session_context_t *)context;
-    int fd = session->fd;
-
-    if (FD_ISSET(fd, ctx->fdset) || httpd_sess_pending(ctx->hd, session)) {
-        ESP_LOGD(TAG, LOG_FMT("processing socket %d"), fd);
-        if (httpd_sess_process(ctx->hd, session) != ESP_OK) {
-            httpd_sess_delete(ctx->hd, session); // Delete session
-        }
-    }
-    return 1;
-}
-
 /* Manage in-coming connection or data requests */
 static esp_err_t httpd_server(struct httpd_data *hd)
 {
@@ -258,7 +189,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     //FD_ZERO initialized the fd set (read_set) to be empty
     FD_ZERO(&read_set);
 
-    if (hd->config.lru_purge_enable || httpd_sess_get_free(hd)) {
+    if (hd->config.lru_purge_enable || http_sess_get_free(hd)) {
         /* Only listen for new connections if server has capacity to
          * handle more (or when LRU purge is enabled, in which case
          * older connections will be closed) */
@@ -306,7 +237,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
         while (current <= end) {
             if (!fd_is_valid(current->fd)) {
                 ESP_LOGW(TAG, LOG_FMT("Closing invalid socket %d"), current->fd);
-                httpd_sess_delete(hd, current);
+                http_sess_delete(hd, current);
             }
             current++;
         }
@@ -365,13 +296,13 @@ static esp_err_t httpd_server(struct httpd_data *hd)
             if(ret == ESP_OK){
                 if(httpd_req_delete(hd)!= ESP_OK){
                     ESP_LOGW(TAG, LOG_FMT("request delete failed, deleting session"));
-                    httpd_sess_delete(hd, current); 
+                    http_sess_delete(hd, current); 
                 }else{
                     ESP_LOGI(TAG, LOG_FMT("deleted request"));
                 }
             }else{
                 ESP_LOGI(TAG, LOG_FMT("deleting session"));
-                httpd_sess_delete(hd, current); 
+                http_sess_delete(hd, current); 
             }
             //the sess with highest lru_counter is the most recently used
             current->lru_counter = ++hd->lru_counter;
@@ -411,7 +342,7 @@ static void httpd_thread(void *arg)
     ESP_LOGD(TAG, LOG_FMT("web server exiting"));
     close(hd->msg_fd);
     cs_free_ctrl_sock(hd->ctrl_fd);
-    httpd_sess_close_all(hd);
+    http_sess_close_all(hd);
     close(hd->listen_fd);
     hd->hd_td.status = THREAD_STOPPED;
     httpd_os_thread_delete();
@@ -581,7 +512,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     return ESP_OK;
 }
 
-esp_err_t httpd_stop(httpd_handle_t handle)
+esp_err_t http_stop(httpd_handle_t handle)
 {
     struct httpd_data *hd = (struct httpd_data *) handle;
     if (hd == NULL) {

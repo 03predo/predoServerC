@@ -11,7 +11,7 @@
 #include <http_parser.h>
 
 #include <PredoHttpServer.h>
-#include "esp_httpd_priv.h"
+#include "esp_http_priv.h"
 
 static const char *TAG = "httpd_uri";
 
@@ -19,65 +19,6 @@ static bool httpd_uri_match_simple(const char *uri1, const char *uri2, size_t le
 {
     return strlen(uri1) == len2 &&          // First match lengths
         (strncmp(uri1, uri2, len2) == 0);   // Then match actual URIs
-}
-
-bool httpd_uri_match_wildcard(const char *template, const char *uri, size_t len)
-{
-    const size_t tpl_len = strlen(template);
-    size_t exact_match_chars = tpl_len;
-
-    /* Check for trailing question mark and asterisk */
-    const char last = (const char) (tpl_len > 0 ? template[tpl_len - 1] : 0);
-    const char prevlast = (const char) (tpl_len > 1 ? template[tpl_len - 2] : 0);
-    const bool asterisk = last == '*' || (prevlast == '*' && last == '?');
-    const bool quest = last == '?' || (prevlast == '?' && last == '*');
-
-    /* Minimum template string length must be:
-     *      0 : if neither of '*' and '?' are present
-     *      1 : if only '*' is present
-     *      2 : if only '?' is present
-     *      3 : if both are present
-     *
-     * The expression (asterisk + quest*2) serves as a
-     * case wise generator of these length values
-     */
-
-    /* abort in cases such as "?" with no preceding character (invalid template) */
-    if (exact_match_chars < asterisk + quest*2) {
-        return false;
-    }
-
-    /* account for special characters and the optional character if "?" is used */
-    exact_match_chars -= asterisk + quest*2;
-
-    if (len < exact_match_chars) {
-        return false;
-    }
-
-    if (!quest) {
-        if (!asterisk && len != exact_match_chars) {
-            /* no special characters and different length - strncmp would return false */
-            return false;
-        }
-        /* asterisk allows arbitrary trailing characters, we ignore these using
-         * exact_match_chars as the length limit */
-        return (strncmp(template, uri, exact_match_chars) == 0);
-    } else {
-        /* question mark present */
-        if (len > exact_match_chars && template[exact_match_chars] != uri[exact_match_chars]) {
-            /* the optional character is present, but different */
-            return false;
-        }
-        if (strncmp(template, uri, exact_match_chars) != 0) {
-            /* the mandatory part differs */
-            return false;
-        }
-        /* Now we know the URI is longer than the required part of template,
-         * the mandatory part matches, and if the optional character is present, it is correct.
-         * Match is OK if we have asterisk, i.e. any trailing characters are OK, or if
-         * there are no characters beyond the optional character. */
-        return asterisk || len <= exact_match_chars + 1;
-    }
 }
 
 /* Find handler with matching URI and method, and set
@@ -164,15 +105,6 @@ esp_err_t httpd_register_uri_handler(httpd_handle_t handle,
             hd->hd_calls[i]->method   = uri_handler->method;
             hd->hd_calls[i]->handler  = uri_handler->handler;
             hd->hd_calls[i]->user_ctx = uri_handler->user_ctx;
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-            hd->hd_calls[i]->is_websocket = uri_handler->is_websocket;
-            hd->hd_calls[i]->handle_ws_control_frames = uri_handler->handle_ws_control_frames;
-            if (uri_handler->supported_subprotocol) {
-                hd->hd_calls[i]->supported_subprotocol = strdup(uri_handler->supported_subprotocol);
-            } else {
-                hd->hd_calls[i]->supported_subprotocol = NULL;
-            }
-#endif
             ESP_LOGD(TAG, LOG_FMT("[%d] installed %s"), i, uri_handler->uri);
             return ESP_OK;
         }

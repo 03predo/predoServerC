@@ -303,7 +303,7 @@ esp_err_t  HttpStart(httpd_handle_t *handle, const httpd_config_t *config);
  *  - ESP_OK : Server stopped successfully
  *  - ESP_ERR_INVALID_ARG : Handle argument is Null
  */
-esp_err_t httpd_stop(httpd_handle_t handle);
+esp_err_t http_stop(httpd_handle_t handle);
 
 /** End of Group Initialization
  * @}
@@ -828,26 +828,6 @@ int httpd_req_to_sockfd(httpd_req_t *r);
 int httpd_req_recv(httpd_req_t *r, char *buf, size_t buf_len);
 
 /**
- * @brief   Search for a field in request headers and
- *          return the string length of it's value
- *
- * @note
- *  - This API is supposed to be called only from the context of
- *    a URI handler where httpd_req_t* request pointer is valid.
- *  - Once httpd_resp_send() API is called all request headers
- *    are purged, so request headers need be copied into separate
- *    buffers if they are required later.
- *
- * @param[in]  r        The request being responded to
- * @param[in]  field    The header field to be searched in the request
- *
- * @return
- *  - Length    : If field is found in the request URL
- *  - Zero      : Field not found / Invalid request / Null arguments
- */
-size_t httpd_req_get_hdr_value_len(httpd_req_t *r, const char *field);
-
-/**
  * @brief   Get the value string of a field from the request headers
  *
  * @note
@@ -873,118 +853,6 @@ size_t httpd_req_get_hdr_value_len(httpd_req_t *r, const char *field);
  *  - ESP_ERR_HTTPD_RESULT_TRUNC : Value string truncated
  */
 esp_err_t httpd_req_get_hdr_value_str(httpd_req_t *r, const char *field, char *val, size_t val_size);
-
-/**
- * @brief   Get Query string length from the request URL
- *
- * @note    This API is supposed to be called only from the context of
- *          a URI handler where httpd_req_t* request pointer is valid
- *
- * @param[in]  r    The request being responded to
- *
- * @return
- *  - Length    : Query is found in the request URL
- *  - Zero      : Query not found / Null arguments / Invalid request
- */
-size_t httpd_req_get_url_query_len(httpd_req_t *r);
-
-/**
- * @brief   Get Query string from the request URL
- *
- * @note
- *  - Presently, the user can fetch the full URL query string, but decoding
- *    will have to be performed by the user. Request headers can be read using
- *    httpd_req_get_hdr_value_str() to know the 'Content-Type' (eg. Content-Type:
- *    application/x-www-form-urlencoded) and then the appropriate decoding
- *    algorithm needs to be applied.
- *  - This API is supposed to be called only from the context of
- *    a URI handler where httpd_req_t* request pointer is valid
- *  - If output size is greater than input, then the value is truncated,
- *    accompanied by truncation error as return value
- *  - Prior to calling this function, one can use httpd_req_get_url_query_len()
- *    to know the query string length beforehand and hence allocate the buffer
- *    of right size (usually query string length + 1 for null termination)
- *    for storing the query string
- *
- * @param[in]  r         The request being responded to
- * @param[out] buf       Pointer to the buffer into which the query string will be copied (if found)
- * @param[in]  buf_len   Length of output buffer
- *
- * @return
- *  - ESP_OK : Query is found in the request URL and copied to buffer
- *  - ESP_ERR_NOT_FOUND          : Query not found
- *  - ESP_ERR_INVALID_ARG        : Null arguments
- *  - ESP_ERR_HTTPD_INVALID_REQ  : Invalid HTTP request pointer
- *  - ESP_ERR_HTTPD_RESULT_TRUNC : Query string truncated
- */
-esp_err_t httpd_req_get_url_query_str(httpd_req_t *r, char *buf, size_t buf_len);
-
-/**
- * @brief   Helper function to get a URL query tag from a query
- *          string of the type param1=val1&param2=val2
- *
- * @note
- *  - The components of URL query string (keys and values) are not URLdecoded.
- *    The user must check for 'Content-Type' field in the request headers and
- *    then depending upon the specified encoding (URLencoded or otherwise) apply
- *    the appropriate decoding algorithm.
- *  - If actual value size is greater than val_size, then the value is truncated,
- *    accompanied by truncation error as return value.
- *
- * @param[in]  qry       Pointer to query string
- * @param[in]  key       The key to be searched in the query string
- * @param[out] val       Pointer to the buffer into which the value will be copied if the key is found
- * @param[in]  val_size  Size of the user buffer "val"
- *
- * @return
- *  - ESP_OK : Key is found in the URL query string and copied to buffer
- *  - ESP_ERR_NOT_FOUND          : Key not found
- *  - ESP_ERR_INVALID_ARG        : Null arguments
- *  - ESP_ERR_HTTPD_RESULT_TRUNC : Value string truncated
- */
-esp_err_t httpd_query_key_value(const char *qry, const char *key, char *val, size_t val_size);
-
-/**
- * @brief   Get the value string of a cookie value from the "Cookie" request headers by cookie name.
- *
- * @param[in]       req             Pointer to the HTTP request
- * @param[in]       cookie_name     The cookie name to be searched in the request
- * @param[out]      val             Pointer to the buffer into which the value of cookie will be copied if the cookie is found
- * @param[inout]    val_size        Pointer to size of the user buffer "val". This variable will contain cookie length if
- *                                  ESP_OK is returned and required buffer length incase ESP_ERR_HTTPD_RESULT_TRUNC is returned.
- *
- * @return
- *  - ESP_OK : Key is found in the cookie string and copied to buffer
- *  - ESP_ERR_NOT_FOUND          : Key not found
- *  - ESP_ERR_INVALID_ARG        : Null arguments
- *  - ESP_ERR_HTTPD_RESULT_TRUNC : Value string truncated
- *  - ESP_ERR_NO_MEM             : Memory allocation failure
- */
-esp_err_t httpd_req_get_cookie_val(httpd_req_t *req, const char *cookie_name, char *val, size_t *val_size);
-
-/**
- * @brief Test if a URI matches the given wildcard template.
- *
- * Template may end with "?" to make the previous character optional (typically a slash),
- * "*" for a wildcard match, and "?*" to make the previous character optional, and if present,
- * allow anything to follow.
- *
- * Example:
- *   - * matches everything
- *   - /foo/? matches /foo and /foo/
- *   - /foo/\* (sans the backslash) matches /foo/ and /foo/bar, but not /foo or /fo
- *   - /foo/?* or /foo/\*?  (sans the backslash) matches /foo/, /foo/bar, and also /foo, but not /foox or /fo
- *
- * The special characters "?" and "*" anywhere else in the template will be taken literally.
- *
- * @param[in] uri_template   URI template (pattern)
- * @param[in] uri_to_match   URI to be matched
- * @param[in] match_upto     how many characters of the URI buffer to test
- *                          (there may be trailing query string etc.)
- *
- * @return true if a match was found
- */
-bool httpd_uri_match_wildcard(const char *uri_template, const char *uri_to_match, size_t match_upto);
 
 /**
  * @brief   API to send a complete HTTP response.
@@ -1383,93 +1251,6 @@ int httpd_socket_recv(httpd_handle_t hd, int sockfd, char *buf, size_t buf_len, 
  * Functions for controlling sessions and accessing context data
  * @{
  */
-
-/**
- * @brief   Get session context from socket descriptor
- *
- * Typically if a session context is created, it is available to URI handlers
- * through the httpd_req_t structure. But, there are cases where the web
- * server's send/receive functions may require the context (for example, for
- * accessing keying information etc). Since the send/receive function only have
- * the socket descriptor at their disposal, this API provides them with a way to
- * retrieve the session context.
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @param[in] sockfd    The socket descriptor for which the context should be extracted.
- *
- * @return
- *  - void* : Pointer to the context associated with this session
- *  - NULL  : Empty context / Invalid handle / Invalid socket fd
- */
-void *httpd_sess_get_ctx(httpd_handle_t handle, int sockfd);
-
-/**
- * @brief   Set session context by socket descriptor
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @param[in] sockfd    The socket descriptor for which the context should be extracted.
- * @param[in] ctx       Context object to assign to the session
- * @param[in] free_fn   Function that should be called to free the context
- */
-void httpd_sess_set_ctx(httpd_handle_t handle, int sockfd, void *ctx, httpd_free_ctx_fn_t free_fn);
-
-/**
- * @brief   Get session 'transport' context by socket descriptor
- * @see     httpd_sess_get_ctx()
- *
- * This context is used by the send/receive functions, for example to manage SSL context.
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @param[in] sockfd    The socket descriptor for which the context should be extracted.
- * @return
- *  - void* : Pointer to the transport context associated with this session
- *  - NULL  : Empty context / Invalid handle / Invalid socket fd
- */
-void *httpd_sess_get_transport_ctx(httpd_handle_t handle, int sockfd);
-
-/**
- * @brief   Set session 'transport' context by socket descriptor
- * @see     httpd_sess_set_ctx()
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @param[in] sockfd    The socket descriptor for which the context should be extracted.
- * @param[in] ctx       Transport context object to assign to the session
- * @param[in] free_fn   Function that should be called to free the transport context
- */
-void httpd_sess_set_transport_ctx(httpd_handle_t handle, int sockfd, void *ctx, httpd_free_ctx_fn_t free_fn);
-
-/**
- * @brief   Get HTTPD global user context (it was set in the server config struct)
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @return global user context
- */
-void *httpd_get_global_user_ctx(httpd_handle_t handle);
-
-/**
- * @brief   Get HTTPD global transport context (it was set in the server config struct)
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @return global transport context
- */
-void *httpd_get_global_transport_ctx(httpd_handle_t handle);
-
-/**
- * @brief   Trigger an httpd session close externally
- *
- * @note    Calling this API is only required in special circumstances wherein
- *          some application requires to close an httpd client session asynchronously.
- *
- * @param[in] handle    Handle to server returned by httpd_start
- * @param[in] sockfd    The socket descriptor of the session to be closed
- *
- * @return
- *  - ESP_OK    : On successfully initiating closure
- *  - ESP_FAIL  : Failure to queue work
- *  - ESP_ERR_NOT_FOUND   : Socket fd not found
- *  - ESP_ERR_INVALID_ARG : Null arguments
- */
-
 /**
  * @brief   Update LRU counter for a given socket
  *
@@ -1498,7 +1279,7 @@ void *httpd_get_global_transport_ctx(httpd_handle_t handle);
  *  - ESP_ERR_NOT_FOUND   : Socket not found
  *  - ESP_ERR_INVALID_ARG : Null arguments
  */
-esp_err_t httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd);
+//esp_err_t httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd);
 
 /**
  * @brief   Returns list of current socket descriptors of active sessions

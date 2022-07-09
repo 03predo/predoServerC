@@ -28,7 +28,7 @@
 #include <unistd.h>
 
 #include "inc/PredoHttpServer.h"
-#include "inc/esp_httpd_priv.h"
+#include "inc/esp_http_priv.h"
 
 
 EventGroupHandle_t wifi_event_group;
