@@ -1,9 +1,8 @@
 #include "main.h"
 
 static const char* TAG = "main";
-char buf[500];
-static bool server_on = true;
-
+char predoServerHTML[500];
+char stopHTML[500];
 
 static esp_err_t favicon_get_handler(httpd_req_t *req)
 {
@@ -18,7 +17,7 @@ static httpd_uri_t predoFavicon = {
 
 static esp_err_t predo_get_handler(httpd_req_t *req){
 
-    http_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
+    http_resp_send(req, predoServerHTML, HTTPD_RESP_USE_STRLEN);
     lcd_init();
     lcd_send_string("GET /predoServer");
     return ESP_OK;
@@ -32,8 +31,8 @@ static httpd_uri_t predoServer = {
 };
 
 static esp_err_t predo_server_stop(httpd_req_t *req){
-    http_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
-    server_on = false;
+    http_resp_send(req, stopHTML, HTTPD_RESP_USE_STRLEN);
+    http_stopper(req->handle);
     return ESP_OK;
 }
 
@@ -111,15 +110,23 @@ void app_main(void){
         lcd_send_string("UNKNOWN");
     }
     
-    FILE* f = fopen("/spiffs/index.html", "r");
+    FILE* f = fopen("/spiffs/predoServer.html", "r");
     if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open index.html");
+        ESP_LOGE(TAG, "Failed to open predoServer.html");
         return;
     }
-
-    memset(buf, 0, sizeof(buf));
-    fread(buf, 1, sizeof(buf), f);
+    memset(predoServerHTML, 0, sizeof(predoServerHTML));
+    fread(predoServerHTML, 1, sizeof(predoServerHTML), f);
     fclose(f);
+    f = fopen("/spiffs/stop.html", "r");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open stop.html");
+        return;
+    }
+    memset(stopHTML, 0, sizeof(stopHTML));
+    fread(stopHTML, 1, sizeof(stopHTML), f);
+    fclose(f);
+
 
     //create http_data object
     httpd_handle_t server = NULL;
@@ -138,17 +145,10 @@ void app_main(void){
         SevSegInt(0);
     }else{
         ESP_LOGI(TAG, "Error starting server!");
-        return;
     }
-    while(server_on){
+    while(!(http_is_shutdown_complete(server))){
         vTaskDelay(100/portTICK_PERIOD_MS);
     }
-    for(int k = 20; k > 0; --k){
-        ESP_LOGD(TAG, "Stopping in %d seconds", k);
-        vTaskDelay(1000/portTICK_PERIOD_MS);
-    }
-    http_stop(server);
-    lcd_put_cur(0,0);
-    lcd_send_string("SERVER STOPPED");
-    return ;
+    ESP_LOGI(TAG, LOG_FMT("server stopped"));
+    return;
 }

@@ -247,7 +247,7 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     //if ctrl_fd has a message, it will have stayed in read_set after select()
     //FD_ISSET returns true if the fd is in the set and false otherwise
     if (FD_ISSET(hd->ctrl_fd, &read_set)) {
-        ESP_LOGI(TAG, LOG_FMT("processing ctrl message"));
+        ESP_LOGI(TAG, LOG_FMT("processing ctrl message on %d"), hd->ctrl_fd);
         struct httpd_ctrl_data msg;
         //recv will take in the data on ctrl_fd into the buffer msg
         //it returns the length of the message
@@ -263,14 +263,14 @@ static esp_err_t httpd_server(struct httpd_data *hd)
 
         switch (msg.hc_type) {
         case HTTPD_CTRL_CLOSE:
-            ESP_LOGD(TAG, LOG_FMT("work"));
+            ESP_LOGI(TAG, LOG_FMT("ctrl msg=work"));
             //the work ctrl message is used for deleting sockets
             //msg.hc_work is a pointer to a function and msg.hc_work_arg
             //is the paramter of the function, see httpd_sess_trigger_close_
             httpd_sess_close(msg.hc_arg);
             break;
         case HTTPD_CTRL_SHUTDOWN:
-            ESP_LOGD(TAG, LOG_FMT("shutdown"));
+            ESP_LOGI(TAG, LOG_FMT("ctrl msg=shutdown"));
             hd->hd_td.status = THREAD_STOPPING;
             break;
         default:
@@ -345,6 +345,7 @@ static void httpd_thread(void *arg)
     http_sess_close_all(hd);
     close(hd->listen_fd);
     hd->hd_td.status = THREAD_STOPPED;
+    hd->shutdown_complete = true;
     httpd_os_thread_delete();
 }
 
@@ -361,7 +362,7 @@ static void HttpDelete(struct httpd_data *hd)
         if (!hd->hd_calls[i]) {
             break;
         }
-        ESP_LOGD(TAG, LOG_FMT("[%d] removing %s"), i, hd->hd_calls[i]->uri);
+        ESP_LOGI(TAG, LOG_FMT("[%d] removing %s"), i, hd->hd_calls[i]->uri);
 
         free((char*)hd->hd_calls[i]->uri);
         free(hd->hd_calls[i]);
@@ -558,6 +559,26 @@ esp_err_t http_stop(httpd_handle_t handle)
     return ESP_OK;
 }
 
+esp_err_t http_stopper(httpd_handle_t handle)
+{
+    struct httpd_data *hd = (struct httpd_data *) handle;
+    if (hd == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    struct httpd_ctrl_data msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.hc_type = HTTPD_CTRL_SHUTDOWN;
+    int ret = 0;
+    if ((ret = cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg))) < 0) {
+        ESP_LOGE(TAG, "Failed to send shutdown signal err=%d", ret);
+        return ESP_FAIL;
+    }
+
+    ESP_LOGD(TAG, LOG_FMT("sent control msg to stop server"));
+    return ESP_OK;
+}
+
 static esp_err_t httpd_send_all(httpd_req_t *r, const char *buf, size_t buf_len)
 {
     struct httpd_req_aux *ra = r->aux;
@@ -658,3 +679,13 @@ int http_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_afte
     return ret + pending_len; // amount that the 128 byte block is filled
 }
 
+bool http_is_shutdown_complete(httpd_handle_t handle){
+    struct httpd_data *hd = (struct httpd_data *) handle;
+    if (hd == NULL) return ESP_ERR_INVALID_ARG;
+    if(hd->shutdown_complete && hd->hd_td.status == THREAD_STOPPED){
+        HttpDelete(hd);
+        ESP_LOGD(TAG, LOG_FMT("Shutdown Complete"));
+        return true;
+    }
+    return false;
+}

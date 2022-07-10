@@ -1336,9 +1336,13 @@ typedef void (*httpd_work_fn_t)(void *arg);
  */
 esp_err_t httpd_queue_work(httpd_handle_t handle, httpd_work_fn_t work, void *arg);
 
+esp_err_t http_stopper(httpd_handle_t handle);
+
 /** End of Group Work Queue
  * @}
  */
+
+bool http_is_shutdown_complete(httpd_handle_t handle);
 
 /* ************** Group: WebSocket ************** */
 /** @name WebSocket
