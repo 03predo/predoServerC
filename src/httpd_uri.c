@@ -21,12 +21,7 @@ static bool httpd_uri_match_simple(const char *uri1, const char *uri2, size_t le
         (strncmp(uri1, uri2, len2) == 0);   // Then match actual URIs
 }
 
-/* Find handler with matching URI and method, and set
- * appropriate error code if URI or method not found */
-static httpd_uri_t* httpd_find_uri_handler(struct httpd_data *hd,
-                                           const char *uri, size_t uri_len,
-                                           httpd_method_t method,
-                                           httpd_err_code_t *err)
+static httpd_uri_t* httpd_find_uri_handler(struct httpd_data *hd, const char *uri, size_t uri_len, httpd_method_t method, httpd_err_code_t *err)
 {
     if (err) {
         *err = HTTPD_404_NOT_FOUND;
@@ -64,8 +59,7 @@ static httpd_uri_t* httpd_find_uri_handler(struct httpd_data *hd,
     return NULL;
 }
 
-esp_err_t httpd_register_uri_handler(httpd_handle_t handle,
-                                     const httpd_uri_t *uri_handler)
+esp_err_t httpd_register_uri_handler(httpd_handle_t handle, const httpd_uri_t *uri_handler)
 {
     if (handle == NULL || uri_handler == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -112,83 +106,6 @@ esp_err_t httpd_register_uri_handler(httpd_handle_t handle,
     }
     ESP_LOGW(TAG, LOG_FMT("no slots left for registering handler"));
     return ESP_ERR_HTTPD_HANDLERS_FULL;
-}
-
-esp_err_t httpd_unregister_uri_handler(httpd_handle_t handle,
-                                       const char *uri, httpd_method_t method)
-{
-    if (handle == NULL || uri == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    struct httpd_data *hd = (struct httpd_data *) handle;
-    for (int i = 0; i < hd->config.max_uri_handlers; i++) {
-        if (!hd->hd_calls[i]) {
-            break;
-        }
-        if ((hd->hd_calls[i]->method == method) &&       // First match methods
-            (strcmp(hd->hd_calls[i]->uri, uri) == 0)) {  // Then match URI string
-            ESP_LOGD(TAG, LOG_FMT("[%d] removing %s"), i, hd->hd_calls[i]->uri);
-
-            free((char*)hd->hd_calls[i]->uri);
-            free(hd->hd_calls[i]);
-            hd->hd_calls[i] = NULL;
-
-            /* Shift the remaining non null handlers in the array
-             * forward by 1 so that order of insertion is maintained */
-            for (i += 1; i < hd->config.max_uri_handlers; i++) {
-                if (!hd->hd_calls[i]) {
-                    break;
-                }
-                hd->hd_calls[i-1] = hd->hd_calls[i];
-            }
-            /* Nullify the following non null entry */
-            hd->hd_calls[i-1] = NULL;
-            return ESP_OK;
-        }
-    }
-    ESP_LOGW(TAG, LOG_FMT("handler %s with method %d not found"), uri, method);
-    return ESP_ERR_NOT_FOUND;
-}
-
-esp_err_t httpd_unregister_uri(httpd_handle_t handle, const char *uri)
-{
-    if (handle == NULL || uri == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    struct httpd_data *hd = (struct httpd_data *) handle;
-    bool found = false;
-
-    int i = 0, j = 0; // For keeping count of removed entries
-    for (; i < hd->config.max_uri_handlers; i++) {
-        if (!hd->hd_calls[i]) {
-            break;
-        }
-        if (strcmp(hd->hd_calls[i]->uri, uri) == 0) {   // Match URI strings
-            ESP_LOGD(TAG, LOG_FMT("[%d] removing %s"), i, uri);
-
-            free((char*)hd->hd_calls[i]->uri);
-            free(hd->hd_calls[i]);
-            hd->hd_calls[i] = NULL;
-            found = true;
-
-            j++; // Update count of removed entries
-        } else {
-            /* Shift the remaining non null handlers in the array
-             * forward by j so that order of insertion is maintained */
-            hd->hd_calls[i-j] = hd->hd_calls[i];
-        }
-    }
-    /* Nullify the following non null entries */
-    for (int k = (i - j); k < i; k++) {
-        hd->hd_calls[k] = NULL;
-    }
-
-    if (!found) {
-        ESP_LOGW(TAG, LOG_FMT("no handler found for URI %s"), uri);
-    }
-    return (found ? ESP_OK : ESP_ERR_NOT_FOUND);
 }
 
 void httpd_unregister_all_uri_handlers(struct httpd_data *hd)

@@ -106,42 +106,6 @@ do {                                                                 \
 /* Run the notify callback FOR and don't consume the current byte */
 #define CALLBACK_NOTIFY_NOADVANCE(FOR)  CALLBACK_NOTIFY_(FOR, p - data)
 
-/* Run data callback FOR with LEN bytes, returning ER if it fails */
-#define CALLBACK_DATA_(FOR, LEN, ER)                                 \
-do {                                                                 \
-  ESP_LOGD(TAG, LOG_FMT("CALLBACK DATA"));                           \
-  assert(HTTP_PARSER_ERRNO(parser) == HPE_OK);                       \
-                                                                     \
-  if (FOR##_mark) {                                                  \
-    if (LIKELY(settings->on_##FOR)) {                                \
-      parser->state = CURRENT_STATE();                               \
-      if (UNLIKELY(0 !=                                              \
-                   settings->on_##FOR(parser, FOR##_mark, (LEN)))) { \
-        SET_ERRNO(HPE_CB_##FOR);                                     \
-      }                                                              \
-      UPDATE_STATE(parser->state);                                   \
-                                                                     \
-      /* We either errored above or got paused; get out */           \
-      if (UNLIKELY(HTTP_PARSER_ERRNO(parser) != HPE_OK)) {           \
-        return (ER);                                                 \
-      }                                                              \
-    }                                                                \
-    FOR##_mark = NULL;                                               \
-  }                                                                  \
-} while (0)
-
-/* Run the data callback FOR and consume the current byte */
-//FOR will be the last part of the function var in settings 
-// ie) CALLBACK_DATA(header_field) corresponds to settings->on_header_field
-// p - FOR##_mark will become p - header_field_mark which is the length of the header field
-// p - data + 1 is for error checking  
-#define CALLBACK_DATA(FOR)                                           \
-    CALLBACK_DATA_(FOR, p - FOR##_mark, p - data + 1)
-
-/* Run the data callback FOR and don't consume the current byte */
-#define CALLBACK_DATA_NOADVANCE(FOR)                                 \
-    CALLBACK_DATA_(FOR, p - FOR##_mark, p - data)
-
 /* Set the mark FOR; non-destructive if mark is already set */
 #define MARK(FOR)                                                    \
 do {                                                                 \
@@ -181,46 +145,15 @@ do {                                                                 \
 #define CLOSE "close"
 
 
-static const char *method_strings[] = 
-  {
-#define XX(num, name, string) #string, //returns the method strings is a list
-  HTTP_METHOD_MAP(XX)                  //of http methods as strings, through some macro wizardry
-#undef XX
-  };
-
-
 static char * valid = "!#$%%&\'*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefghijklmnopqrstuvwxyz";
 
 
 static char * valid_url = "!\"$%%&\'()*+,-./0123456789:;<=>1@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
-
 enum state
-  { s_dead = 1 /* important that this is > 0 */
-
-  , s_start_req_or_res
-  , s_res_or_resp_I /* for ICY URIs */
-  , s_res_or_resp_H
-  , s_start_res
-  , s_res_I         /* for ICY URIs */
-  , s_res_IC        /* for ICY URIs */
-  , s_res_H
-  , s_res_HT
-  , s_res_HTT
-  , s_res_HTTP
-  , s_res_first_http_major
-  , s_res_http_major
-  , s_res_first_http_minor
-  , s_res_http_minor
-  , s_res_first_status_code
-  , s_res_status_code
-  , s_res_status_start
-  , s_res_status
-  , s_res_line_almost_done
-
-  , s_start_req //21
-
-  , s_req_method //22
+  { s_dead = 1
+  , s_start_req
+  , s_req_method
   , s_req_spaces_before_url
   , s_req_schema
   , s_req_schema_slash
@@ -233,7 +166,7 @@ enum state
   , s_req_query_string
   , s_req_fragment_start
   , s_req_fragment 
-  , s_req_http_start //35
+  , s_req_http_start
   , s_req_http_H
   , s_req_http_HT
   , s_req_http_HTT
@@ -243,142 +176,25 @@ enum state
   , s_req_first_http_minor
   , s_req_http_minor
   , s_req_line_almost_done
-
   , s_header_field_start
   , s_header_field
-  , s_header_value_discard_ws //47
+  , s_header_value_discard_ws
   , s_header_value_discard_ws_almost_done
   , s_header_value_discard_lws
   , s_header_value_start
-  , s_header_value //51
+  , s_header_value
   , s_header_value_lws
-
-  , s_header_almost_done //53
-
-  , s_chunk_size_start
-  , s_chunk_size
-  , s_chunk_parameters
-  , s_chunk_size_almost_done
-
+  , s_header_almost_done
   , s_headers_almost_done
   , s_headers_done
-
-  /* Important: 's_headers_done' must be the last 'header' state. All
-   * states beyond this must be 'body' states. It is used for overflow
-   * checking. See the PARSING_HEADER() macro.
-   */
-
-  , s_chunk_data
-  , s_chunk_data_almost_done
-  , s_chunk_data_done
-
-  , s_body_identity
-  , s_body_identity_eof
-
   , s_message_done
   };
 
 
 #define PARSING_HEADER(state) (state <= s_headers_done)
 
-
-enum header_states
-  { h_general = 0
-  , h_C
-  , h_CO
-  , h_CON
-
-  , h_matching_connection
-  , h_matching_proxy_connection
-  , h_matching_content_length
-  , h_matching_transfer_encoding
-  , h_matching_upgrade
-
-  , h_connection
-  , h_content_length
-  , h_transfer_encoding
-  , h_upgrade
-
-  , h_matching_transfer_encoding_chunked
-  , h_matching_connection_token_start
-  , h_matching_connection_keep_alive
-  , h_matching_connection_close
-  , h_matching_connection_upgrade
-  , h_matching_connection_token
-
-  , h_transfer_encoding_chunked
-  , h_connection_keep_alive
-  , h_connection_close
-  , h_connection_upgrade
-  };
-
-enum http_host_state
-  {
-    s_http_host_dead = 1
-  , s_http_userinfo_start
-  , s_http_userinfo
-  , s_http_host_start
-  , s_http_host_v6_start
-  , s_http_host
-  , s_http_host_v6
-  , s_http_host_v6_end
-  , s_http_host_v6_zone_start
-  , s_http_host_v6_zone
-  , s_http_host_port_start
-  , s_http_host_port
-};
-
-/* Macros for character classes; depends on strict-mode  */
 #define CR                  '\r'
 #define LF                  '\n'
-#define LOWER(c)            (unsigned char)(c | 0x20)
-#define IS_ALPHA(c)         (LOWER(c) >= 'a' && LOWER(c) <= 'z')
-#define IS_NUM(c)           ((c) >= '0' && (c) <= '9')
-#define IS_ALPHANUM(c)      (IS_ALPHA(c) || IS_NUM(c))
-#define IS_HEX(c)           (IS_NUM(c) || (LOWER(c) >= 'a' && LOWER(c) <= 'f'))
-#define IS_MARK(c)          ((c) == '-' || (c) == '_' || (c) == '.' || \
-  (c) == '!' || (c) == '~' || (c) == '*' || (c) == '\'' || (c) == '(' || \
-  (c) == ')')
-#define IS_USERINFO_CHAR(c) (IS_ALPHANUM(c) || IS_MARK(c) || (c) == '%' || \
-  (c) == ';' || (c) == ':' || (c) == '&' || (c) == '=' || (c) == '+' || \
-  (c) == '$' || (c) == ',')
-
-#define STRICT_TOKEN(c)     (tokens[(unsigned char)c])
-
-#if HTTP_PARSER_STRICT
-#define TOKEN(c)            (tokens[(unsigned char)c])
-#define IS_URL_CHAR(c)      (BIT_AT(normal_url_char, (unsigned char)c))
-#define IS_HOST_CHAR(c)     (IS_ALPHANUM(c) || (c) == '.' || (c) == '-')
-#else
-#define TOKEN(c)            ((c == ' ') ? ' ' : tokens[(unsigned char)c])
-#define IS_URL_CHAR(c)                                                         \
-  (BIT_AT(normal_url_char, (unsigned char)c) || ((c) & 0x80))
-#define IS_HOST_CHAR(c)                                                        \
-  (IS_ALPHANUM(c) || (c) == '.' || (c) == '-' || (c) == '_')
-#endif
-
-/**
- * Verify that a char is a valid visible (printable) US-ASCII
- * character or %x80-FF
- **/
-#define IS_HEADER_CHAR(ch)                                                     \
-  (ch == CR || ch == LF || ch == 9 || ((unsigned char)ch > 31 && ch != 127))
-
-#define start_state (parser->type == HTTP_REQUEST ? s_start_req : s_start_res)
-
-
-#if HTTP_PARSER_STRICT
-# define STRICT_CHECK(cond)                                          \
-do {                                                                 \
-  if (cond) {                                                        \
-    SET_ERRNO(HPE_STRICT);                                           \
-    goto error;                                                      \
-  }                                                                  \
-} while (0)
-#else
-# define STRICT_CHECK(cond)
-# define NEW_MESSAGE() start_state
-#endif
 
 static void parser_state(char * state, char ch){
   if (ch == ' '){
@@ -687,8 +503,6 @@ reexecute:
         if (!header_field_mark) { header_field_mark = p; }
         parser->index = 0;
         p_state = (enum state) s_header_field;
-        parser->header_state = h_general;
-
         break;
       }
       case s_header_field:
@@ -754,14 +568,12 @@ reexecute:
           parser->http_errno = HPE_INVALID_HEADER_TOKEN;
           goto error;
         }
-        parser->header_state = h_general;
         break;
       }
       case s_header_value:
       {
         //parser_state("s_header_value", ch);
         const char* start = p;
-        enum header_states h_state = (enum header_states) parser->header_state;
         for (; p != data + len; p++) {
           parser_state("s_header_value", ch);
           ch = *p;
@@ -770,8 +582,11 @@ reexecute:
             char nl = '\n';
             strncat(full_req, &nl, 1);
             p_state = (enum state) s_header_almost_done;
-            parser->header_state = h_state;
-            CALLBACK_DATA(header_value);
+            parser->state = p_state;
+            if (0 != settings->on_header_value(parser, header_value_mark, p - header_value_mark)) parser->http_errno = HPE_CB_header_value;
+            if (parser->http_errno != HPE_OK) return (p - data + 1);
+            p_state = (enum state) parser->state;
+            header_value_mark = NULL;
             break;
           }
 
@@ -781,10 +596,11 @@ reexecute:
             strncat(full_req, &nl, 1);
             p_state = (enum state) s_header_almost_done;
             COUNT_HEADER_SIZE(p - start);
-            parser->header_state = h_state;
-            ESP_LOGI(TAG, "header_field_mark LF: %c", *header_value_mark);
-            CALLBACK_DATA_NOADVANCE(header_value);
-            REEXECUTE();
+            if (0 != settings->on_header_value(parser, header_value_mark, p - header_value_mark)) parser->http_errno = HPE_CB_header_value;
+            if (parser->http_errno != HPE_OK) return (p - data);
+            p_state = (enum state) parser->state;
+            header_value_mark = NULL;
+            goto reexecute;
           }
 
           const char* p_cr;
@@ -808,7 +624,6 @@ reexecute:
           }
           --p;
         }
-        parser->header_state = h_state;
 
         COUNT_HEADER_SIZE(p - start);
 
@@ -854,7 +669,10 @@ reexecute:
         } else {
           if (!header_value_mark) { header_value_mark = p; }
           p_state = (enum state) s_header_field_start;
-          CALLBACK_DATA_NOADVANCE(header_value);
+          if (0 != settings->on_header_value(parser, header_value_mark, p - header_value_mark)) parser->http_errno = HPE_CB_header_value;
+          if (parser->http_errno != HPE_OK) return (p - data);
+          p_state = (enum state) parser->state;
+          header_value_mark = NULL;
           goto reexecute;
         }
       }
@@ -865,38 +683,7 @@ reexecute:
           parser->http_errno = HPE_LF_EXPECTED;
         }
 
-        if (parser->flags & F_TRAILING) {
-          /* End of a chunked request */
-          p_state = (enum state) s_message_done;
-          CALLBACK_NOTIFY_NOADVANCE(chunk_complete);
-          goto reexecute;
-        }
-
-        /* Cannot use chunked encoding and a content-length header together
-           per the HTTP specification. */
-        if ((parser->flags & F_CHUNKED) &&
-            (parser->flags & F_CONTENTLENGTH)) {
-          parser->http_errno = HPE_UNEXPECTED_CONTENT_LENGTH;
-          goto error;
-        }
-
         p_state = (enum state) s_headers_done;
-
-        /* Set this here so that on_headers_complete() callbacks can see it */
-        parser->upgrade =
-          ((parser->flags & (F_UPGRADE | F_CONNECTION_UPGRADE)) ==
-           (F_UPGRADE | F_CONNECTION_UPGRADE) ||
-           parser->method == HTTP_CONNECT);
-
-        /* Here we call the headers_complete callback. This is somewhat
-         * different than other callbacks because if the user returns 1, we
-         * will interpret that as saying that this message has no body. This
-         * is needed for the annoying case of recieving a response to a HEAD
-         * request.
-         *
-         * We'd like to use CALLBACK_NOTIFY_NOADVANCE() here but we cannot, so
-         * we have to simulate it by handling a change in errno below.
-         */
         if (settings->on_headers_complete) {
           switch (settings->on_headers_complete(parser)) {
             case 0:
@@ -911,16 +698,20 @@ reexecute:
           RETURN(p - data);
         }
 
-        REEXECUTE();
+        goto reexecute;
       }
       case s_headers_done:
       {
         parser_state("s_headers_done", ch);
         ESP_LOGI(TAG, LOG_FMT("parsed request of length %d\n\n%s"), overall_len, full_req);
         overall_len = 0;
-        STRICT_CHECK(ch != LF);
-        CALLBACK_NOTIFY(message_complete);
-        RETURN((p - data) + 1);
+        if (ch != '\n'){ SET_ERRNO(HPE_STRICT); goto error;}
+        parser->state = CURRENT_STATE();
+        if (0 != settings->on_message_complete(parser)) SET_ERRNO(HPE_CB_message_complete);
+        p_state = (enum state) (parser->state);
+        if (HTTP_PARSER_ERRNO(parser) != HPE_OK) return (p - data + 1);
+        parser->state = p_state;
+        return ((p - data) + 1);
         break;
       }
       default:
@@ -949,7 +740,7 @@ void http_parser_init (http_parser *parser, enum http_parser_type t)
   memset(parser, 0, sizeof(*parser));
   parser->data = data;
   parser->type = t;
-  parser->state = (t == HTTP_REQUEST ? s_start_req : (t == HTTP_RESPONSE ? s_start_res : s_start_req_or_res));
+  parser->state = s_start_req;
   parser->http_errno = HPE_OK;
 }
 
@@ -1014,8 +805,3 @@ void http_parser_pause(http_parser *parser, int paused) {
   }
 }
 
-unsigned long http_parser_version(void) {
-  return HTTP_PARSER_VERSION_MAJOR * 0x10000 |
-         HTTP_PARSER_VERSION_MINOR * 0x00100 |
-         HTTP_PARSER_VERSION_PATCH * 0x00001;
-}

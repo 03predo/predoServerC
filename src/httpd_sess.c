@@ -191,7 +191,7 @@ void http_sess_delete(struct httpd_data *hd, struct sock_db *session)
 
     // decrement number of sessions
     hd->hd_sd_active_count--;
-    ESP_LOGD(TAG, LOG_FMT("active sockets: %d"), hd->hd_sd_active_count);
+    ESP_LOGI(TAG, LOG_FMT("active sockets: %d"), hd->hd_sd_active_count);
     SevSegInt(hd->hd_sd_active_count);
     if (!hd->hd_sd_active_count) {
         hd->lru_counter = 0;

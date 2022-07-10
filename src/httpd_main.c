@@ -180,7 +180,6 @@ static int fd_is_valid(int fd)
     return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
 }
 
-/* Manage in-coming connection or data requests */
 static esp_err_t httpd_server(struct httpd_data *hd)
 {
     ESP_LOGI(TAG, "HTTP SERVER");
@@ -324,7 +323,6 @@ static esp_err_t httpd_server(struct httpd_data *hd)
     return ESP_OK;
 }
 
-/* The main HTTPD thread */
 static void httpd_thread(void *arg)
 {
     int ret;
@@ -510,52 +508,6 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     }
 
     *handle = (httpd_handle_t *)hd;
-    return ESP_OK;
-}
-
-esp_err_t http_stop(httpd_handle_t handle)
-{
-    struct httpd_data *hd = (struct httpd_data *) handle;
-    if (hd == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    struct httpd_ctrl_data msg;
-    memset(&msg, 0, sizeof(msg));
-    msg.hc_type = HTTPD_CTRL_SHUTDOWN;
-    int ret = 0;
-    if ((ret = cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg))) < 0) {
-        ESP_LOGE(TAG, "Failed to send shutdown signal err=%d", ret);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGD(TAG, LOG_FMT("sent control msg to stop server"));
-    while (hd->hd_td.status != THREAD_STOPPED) {
-        httpd_os_thread_sleep(100);
-    }
-
-    /* Release global user context, if not NULL */
-    if (hd->config.global_user_ctx) {
-        if (hd->config.global_user_ctx_free_fn) {
-            hd->config.global_user_ctx_free_fn(hd->config.global_user_ctx);
-        } else {
-            free(hd->config.global_user_ctx);
-        }
-        hd->config.global_user_ctx = NULL;
-    }
-
-    /* Release global transport context, if not NULL */
-    if (hd->config.global_transport_ctx) {
-        if (hd->config.global_transport_ctx_free_fn) {
-            hd->config.global_transport_ctx_free_fn(hd->config.global_transport_ctx);
-        } else {
-            free(hd->config.global_transport_ctx);
-        }
-        hd->config.global_transport_ctx = NULL;
-    }
-
-    HttpDelete(hd);
-    ESP_LOGI(TAG, LOG_FMT("Server Stopped"));
     return ESP_OK;
 }
 

@@ -276,34 +276,6 @@ typedef struct httpd_config {
  */
 esp_err_t  HttpStart(httpd_handle_t *handle, const httpd_config_t *config);
 
-/**
- * @brief Stops the web server
- *
- * Deallocates memory/resources used by an HTTP server instance and
- * deletes it. Once deleted the handle can no longer be used for accessing
- * the instance.
- *
- * Example usage:
- * @code{c}
- *
- * // Function for stopping the webserver
- * void stop_webserver(httpd_handle_t server)
- * {
- *      // Ensure handle is non NULL
- *      if (server != NULL) {
- *          // Stop the httpd server
- *          httpd_stop(server);
- *      }
- * }
- *
- * @endcode
- *
- * @param[in] handle Handle to server returned by httpd_start
- * @return
- *  - ESP_OK : Server stopped successfully
- *  - ESP_ERR_INVALID_ARG : Handle argument is Null
- */
-esp_err_t http_stop(httpd_handle_t handle);
 
 /** End of Group Initialization
  * @}
@@ -482,8 +454,8 @@ esp_err_t httpd_register_uri_handler(httpd_handle_t handle,
  *  - ESP_ERR_INVALID_ARG : Null arguments
  *  - ESP_ERR_NOT_FOUND   : Handler with specified URI and method not found
  */
-esp_err_t httpd_unregister_uri_handler(httpd_handle_t handle,
-                                       const char *uri, httpd_method_t method);
+//esp_err_t httpd_unregister_uri_handler(httpd_handle_t handle,
+//                                       const char *uri, httpd_method_t method);
 
 /**
  * @brief   Unregister all URI handlers with the specified uri string
@@ -497,7 +469,7 @@ esp_err_t httpd_unregister_uri_handler(httpd_handle_t handle,
  *  - ESP_ERR_INVALID_ARG : Null arguments
  *  - ESP_ERR_NOT_FOUND   : No handler registered with specified uri string
  */
-esp_err_t httpd_unregister_uri(httpd_handle_t handle, const char* uri);
+//esp_err_t httpd_unregister_uri(httpd_handle_t handle, const char* uri);
 
 /** End of URI Handlers
  * @}

@@ -97,11 +97,7 @@ static esp_err_t verify_url (http_parser *parser)
     return ESP_OK;
 }
 
-/* http_parser callback on finding url in HTTP request
- * Will be invoked ATLEAST once every packet
- */
-static esp_err_t cb_url(http_parser *parser,
-                        const char *at, size_t length)
+static esp_err_t cb_url(http_parser *parser, const char *at, size_t length)
 {
     parser_data_t *parser_data = (parser_data_t *) parser->data;
     if (parser_data->status == PARSING_IDLE) {
@@ -175,11 +171,12 @@ static size_t continue_parsing(http_parser *parser, size_t length)
     ESP_LOGD(TAG, LOG_FMT("un-paused"));
     return length;
 }
-//parser holds data about request and parsing
-//at is the address of the start of the header field in data
-//len is the length header field, ie) Host, len is 4
+
 static esp_err_t cb_header_field(http_parser *parser, const char *at, size_t length)
 {
+    //parser holds data about request and parsing
+    //at is the address of the start of the header field in data
+    //len is the length header field, ie) Host, len is 4
     parser_data_t *parser_data = (parser_data_t *) parser->data;
     struct httpd_req *r        = parser_data->req;
     struct httpd_req_aux *ra   = r->aux;
@@ -223,11 +220,10 @@ static esp_err_t cb_header_field(http_parser *parser, const char *at, size_t len
     return ESP_OK;
 }
 
-/* http_parser callback on header value in HTTP request.
- * May be invoked ATLEAST once every header value
- */
 static esp_err_t cb_header_value(http_parser *parser, const char *at, size_t length)
 {
+    //http_parser callback on header value in HTTP request.
+    //May be invoked ATLEAST once every header value
     parser_data_t *parser_data = (parser_data_t *) parser->data;
 
     if (parser_data->status == PARSING_HDR_FIELD) {
@@ -563,11 +559,10 @@ static void httpd_req_cleanup(httpd_req_t *r)
     r->user_ctx = NULL;
 }
 
-/* Function that processes incoming TCP data and
- * updates the http request data httpd_req_t
- */
 esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd)
 {
+    //Function that processes incoming TCP data and
+    //updates the http request data httpd_req_t
     httpd_req_t *r = &hd->hd_req;
     init_req(r, &hd->config);
     init_req_aux(&hd->hd_req_aux, &hd->config);
@@ -598,10 +593,9 @@ esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd)
     return ret;
 }
 
-/* Function that resets the http request data
- */
 esp_err_t httpd_req_delete(struct httpd_data *hd)
 {
+    //Function that resets the http request data
     httpd_req_t *r = &hd->hd_req;
     struct httpd_req_aux *ra = r->aux;
 
