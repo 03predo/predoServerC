@@ -22,38 +22,26 @@
 extern "C" {
 #endif
 
-/* Size of request data block/chunk (not to be confused with chunked encoded data)
- * that is received and parsed in one turn of the parsing process. This should not
- * exceed the scratch buffer size and should at least be 8 bytes */
 #define PARSER_BLOCK_SIZE  128
 
-/* Calculate the maximum size needed for the scratch buffer */
 #define HTTPD_SCRATCH_BUF  MAX(HTTPD_MAX_REQ_HDR_LEN, HTTPD_MAX_URI_LEN)
 
-/* Formats a log string to prepend context function name */
 #define LOG_FMT(x)      "%s: " x, __func__
 
-/**
- * @brief Thread related data for internal use
- */
 struct thread_data {
-    othread_t handle;   /*!< Handle to thread/task */
+    othread_t handle;   //Handle to thread/task
     enum {
         THREAD_IDLE = 0,
         THREAD_RUNNING,
         THREAD_STOPPING,
         THREAD_STOPPED,
-    } status;           /*!< State of the thread */
+    } status;           //State of the thread
 };
 
-/**
- * @brief A database of all the open sockets in the system.
- */
 struct sock_db {
-    int fd;                                 /*!< The file descriptor for this socket */
-    void *ctx;                              /*!< A custom context for this socket */
+    int fd;                                 //The file descriptor for this socket
+    void *ctx;                              //A custom context for this socket
     bool ignore_sess_ctx_changes;           /*!< Flag indicating if session context changes should be ignored */
-    void *transport_ctx;                    /*!< A custom 'transport' context for this socket, to be used by send/recv/pending */
     httpd_handle_t handle;                  /*!< Server handle */
     httpd_free_ctx_fn_t free_ctx;      /*!< Function for freeing the context */
     httpd_free_ctx_fn_t free_transport_ctx; /*!< Function for freeing the 'transport' context */
@@ -64,19 +52,8 @@ struct sock_db {
     bool lru_socket;                        /*!< Flag indicating LRU socket */
     char pending_data[PARSER_BLOCK_SIZE];   /*!< Buffer for pending data to be received */
     size_t pending_len;                     /*!< Length of pending data to be received */
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    bool ws_handshake_done;                 /*!< True if it has done WebSocket handshake (if this socket is a valid WS) */
-    bool ws_close;                          /*!< Set to true to close the socket later (when WS Close frame received) */
-    esp_err_t (*ws_handler)(httpd_req_t *r);   /*!< WebSocket handler, leave to null if it's not WebSocket */
-    bool ws_control_frames;                         /*!< WebSocket flag indicating that control frames should be passed to user handlers */
-    void *ws_user_ctx;                         /*!< Pointer to user context data which will be available to handler for websocket*/
-#endif
 };
 
-/**
- * @brief   Auxiliary data structure for use during reception and processing
- *          of requests and temporarily keeping responses
- */
 struct httpd_req_aux {
     struct sock_db *sd;                             /*!< Pointer to socket database */
     char            scratch[HTTPD_SCRATCH_BUF + 1]; /*!< Temporary buffer for our operations (1 byte extra for null termination) */
@@ -91,18 +68,8 @@ struct httpd_req_aux {
         const char *value;
     } *resp_hdrs;                                   /*!< Additional headers in response packet */
     struct http_parser_url url_parse_res;           /*!< URL parsing result, used for retrieving URL elements */
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    bool ws_handshake_detect;                       /*!< WebSocket handshake detection flag */
-    httpd_ws_type_t ws_type;                        /*!< WebSocket frame type */
-    bool ws_final;                                  /*!< WebSocket FIN bit (final frame or not) */
-    uint8_t mask_key[4];                            /*!< WebSocket mask key for this payload */
-#endif
 };
 
-/**
- * @brief   Server data for each instance. This is exposed publicly as
- *          httpd_handle_t but internal structure/members are kept private.
- */
 struct httpd_data {
     httpd_config_t config;                  /*!< HTTPD server configuration */
     int listen_fd;                          /*!< Server listener FD */
@@ -121,226 +88,35 @@ struct httpd_data {
     httpd_err_handler_func_t *err_handler_fns;
 };
 
-/******************* Group : Session Management ********************/
-/** @name Session Management
- * Functions related to HTTP session management
- * @{
- */
+/*session functions*/
 
-// Enum function, which will be called for each session
-typedef int (*httpd_session_enum_function)(struct sock_db *session, void *context);
-
-/**
- * @brief  Enumerates all sessions
- *
- * @param[in] hd            Server instance data
- * @param[in] enum_function Enumeration function, which will be called for each session
- * @param[in] context       Context, which will be passed to the enumeration function
- */
-// static void httpd_sess_enum(struct httpd_data *hd, httpd_session_enum_function enum_function, void *context);
-
-/**
- * @brief   Returns next free session slot (fd<0)
- *
- * @param[in] hd    Server instance data
- *
- * @return
- *  - +VE : Free session slot
- *  - NULL: End of iteration
- */
 struct sock_db *http_sess_get_free(struct httpd_data *hd);
 
-/**
- * @brief Retrieve a session by its descriptor
- *
- * @param[in] hd     Server instance data
- * @param[in] sockfd Socket FD
- * @return pointer into the socket DB, or NULL if not found
- */
-//struct sock_db *httpd_sess_get(struct httpd_data *hd, int sockfd);
-
-/**
- * @brief   Initializes an http session by resetting the sockets database.
- *
- * @param[in] hd    Server instance data
- */
 void httpd_sess_init(struct httpd_data *hd);
 
-/**
- * @brief   Starts a new session for client requesting connection and adds
- *          it's descriptor to the socket database.
- *
- * @param[in] hd    Server instance data
- * @param[in] newfd Descriptor of the new client to be added to the session.
- *
- * @return
- *  - ESP_OK   : on successfully queuing the work
- *  - ESP_FAIL : in case of control socket error while sending
- */
 esp_err_t http_sess_new(struct httpd_data *hd, int newfd);
 
-/**
- * @brief   Processes incoming HTTP requests
- *
- * @param[in] hd      Server instance data
- * @param[in] session Session
- *
- * @return
- *  - ESP_OK    : on successfully receiving, parsing and responding to a request
- *  - ESP_FAIL  : in case of failure in any of the stages of processing
- */
-
-/**
- * @brief   Remove client descriptor from the session / socket database
- *          and close the connection for this client.
- *
- * @param[in] hd      Server instance data
- * @param[in] session Session
- */
 void http_sess_delete(struct httpd_data *hd, struct sock_db *session);
 
-/**
- * @brief   Free session context
- *
- * @param[in] ctx     Pointer to session context
- * @param[in] free_fn Free function to call on session context
- */
 void http_sess_free_ctx(void **ctx, httpd_free_ctx_fn_t free_fn);
 
-/**
- * @brief   Checks if session can accept another connection from new client.
- *          If sockets database is full then this returns false.
- *
- * @param[in] hd  Server instance data
- *
- * @return True if session can accept new clients
- */
 bool http_is_sess_available(struct httpd_data *hd);
 
-/**
- * @brief   Removes the least recently used client from the session
- *
- * This may be useful if new clients are requesting for connection but
- * max number of connections is reached, in which case the client which
- * is inactive for the longest will be removed from the session.
- *
- * @param[in] hd  Server instance data
- *
- * @return
- *  - ESP_OK    : if session closure initiated successfully
- *  - ESP_FAIL  : if failed
- */
-esp_err_t httpd_sess_close_lru(struct httpd_data *hd);
-
-/**
- * @brief   Closes all sessions
- *
- * @param[in] hd  Server instance data
- *
- */
 void http_sess_close_all(struct httpd_data *hd);
 
-/** End of Group : Session Management
- * @}
- */
+/*uri functions*/
 
-/****************** Group : URI Handling ********************/
-/** @name URI Handling
- * Methods for accessing URI handlers
- * @{
- */
-
-/**
- * @brief   For an HTTP request, searches through all the registered URI handlers
- *          and invokes the appropriate one if found
- *
- * @param[in] hd  Server instance data for which handler needs to be invoked
- *
- * @return
- *  - ESP_OK    : if handler found and executed successfully
- *  - ESP_FAIL  : otherwise
- */
 esp_err_t httpd_uri(struct httpd_data *hd);
 
-/**
- * @brief   Unregister all URI handlers
- *
- * @param[in] hd  Server instance data
- */
 void httpd_unregister_all_uri_handlers(struct httpd_data *hd);
 
-/**
- * @brief   Validates the request to prevent users from calling APIs, that are to
- *          be called only inside a URI handler, outside the handler context
- *
- * @param[in] req Pointer to HTTP request that needs to be validated
- *
- * @return
- *  - true  : if valid request
- *  - false : otherwise
- */
-//bool httpd_validate_req_ptr(httpd_req_t *r);
+/*req functions*/
 
-/* httpd_validate_req_ptr() adds some overhead to frequently used APIs,
- * and is useful mostly for debugging, so it's preferable to disable
- * the check by default and enable it only if necessary */
-#ifdef CONFIG_HTTPD_VALIDATE_REQ
-#define httpd_valid_req(r)  httpd_validate_req_ptr(r)
-#else
-#define httpd_valid_req(r)  true
-#endif
-
-/** End of Group : URI Handling
- * @}
- */
-
-/****************** Group : Processing ********************/
-/** @name Processing
- * Methods for processing HTTP requests
- * @{
- */
-
-/**
- * @brief   Initiates the processing of HTTP request
- *
- * Receives incoming TCP packet on a socket, then parses the packet as
- * HTTP request and fills httpd_req_t data structure with the extracted
- * URI, headers are ready to be fetched from scratch buffer and calling
- * http_recv() after this reads the body of the request.
- *
- * @param[in] hd  Server instance data
- * @param[in] sd  Pointer to socket which is needed for receiving TCP packets.
- *
- * @return
- *  - ESP_OK    : if request packet is valid
- *  - ESP_FAIL  : otherwise
- */
 esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd);
 
-/**
- * @brief   For an HTTP request, resets the resources allocated for it and
- *          purges any data left to be received
- *
- * @param[in] hd  Server instance data
- *
- * @return
- *  - ESP_OK    : if request packet deleted and resources cleaned.
- *  - ESP_FAIL  : otherwise.
- */
 esp_err_t httpd_req_delete(struct httpd_data *hd);
 
-/**
- * @brief   For handling HTTP errors by invoking registered
- *          error handler function
- *
- * @param[in] req     Pointer to the HTTP request for which error occurred
- * @param[in] error   Error type
- *
- * @return
- *  - ESP_OK    : error handled successful
- *  - ESP_FAIL  : failure indicates that the underlying socket needs to be closed
- */
-esp_err_t httpd_req_handle_err(httpd_req_t *req, httpd_err_code_t error);
+esp_err_t http_req_handle_err(httpd_req_t *req, httpd_err_code_t error);
 
 /** End of Group : Parsing
  * @}

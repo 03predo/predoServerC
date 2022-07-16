@@ -31,6 +31,9 @@
 #include <string.h>
 #include <limits.h>
 
+#define CR                  '\r'
+#define LF                  '\n'
+
 static const char *TAG = "httpd_parser";
 
 static char * valid = "!#$%%&\'*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefghijklmnopqrstuvwxyz";
@@ -76,12 +79,6 @@ enum state
   , s_headers_done
   , s_message_done
   };
-
-
-#define PARSING_HEADER(state) (state <= s_headers_done)
-
-#define CR                  '\r'
-#define LF                  '\n'
 
 static void parser_state(char * state, char ch){
   if (ch == ' '){
@@ -183,10 +180,10 @@ reexecute:
           goto error;
         }
 
-        if (ch == ' ') {
-          p_state = (enum state)s_req_spaces_before_url;
-        } else if ((parser->index == 1 && ch == 'E') || (parser->index == 2 && ch == 'T')) {
+        if ((parser->index == 1 && ch == 'E') || (parser->index == 2 && ch == 'T')) {
           ++parser->index;
+        }else if (parser->index == 3 && ch == ' '){
+          p_state = (enum state)s_req_spaces_before_url;
         } else {
           parser->http_errno = HPE_INVALID_METHOD;
           goto error;
@@ -231,6 +228,7 @@ reexecute:
             p_state = (enum state) parser->state;
             break;
           default:
+            p_state = parse_url_char(p_state, ch);
             if (p_state == s_dead) {
               parser->http_errno = HPE_INVALID_URL;
               goto error;

@@ -151,7 +151,7 @@ void http_sess_free_ctx(void **ctx, httpd_free_ctx_fn_t free_fn)
 
 void http_sess_clear_ctx(struct sock_db *session)
 {
-    if ((!session) || ((!session->ctx) && (!session->transport_ctx))) {
+    if ((!session) || ((!session->ctx))){
         return;
     }
 
@@ -161,11 +161,6 @@ void http_sess_clear_ctx(struct sock_db *session)
         session->free_ctx = NULL;
     }
 
-    // Free 'transport' context
-    if (session->transport_ctx) {
-        http_sess_free_ctx(&session->transport_ctx, session->free_transport_ctx);
-        session->free_transport_ctx = NULL;
-    }
 }
 
 void http_sess_delete(struct httpd_data *hd, struct sock_db *session)

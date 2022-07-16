@@ -369,7 +369,7 @@ static int read_block(httpd_req_t *req, size_t offset, size_t length)
             /* Invoke error handler which may return ESP_OK
              * to signal for retrying call to recv(), else it may
              * return ESP_FAIL to signal for closure of socket */
-            return (httpd_req_handle_err(req, HTTPD_408_REQ_TIMEOUT) == ESP_OK) ?
+            return (http_req_handle_err(req, HTTPD_408_REQ_TIMEOUT) == ESP_OK) ?
                     HTTPD_SOCK_ERR_TIMEOUT : HTTPD_SOCK_ERR_FAIL;
         }
         /* Some socket error occurred. Return failure
@@ -504,7 +504,7 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
         parser_data.raw_datalen = blk_len + offset;
 
         if ((offset = parse_block(&parser, offset, blk_len, full_req)) < 0) {
-            return httpd_req_handle_err(r, parser_data.error);
+            return http_req_handle_err(r, parser_data.error);
         }
     } while (parser_data.status != PARSING_COMPLETE);
 

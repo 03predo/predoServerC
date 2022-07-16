@@ -553,7 +553,6 @@ static esp_err_t httpd_send_all(httpd_req_t *r, const char *buf, size_t buf_len)
 esp_err_t http_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
 {
     if (r == NULL) return ESP_ERR_INVALID_ARG;
-    if (!httpd_valid_req(r)) return ESP_ERR_HTTPD_INVALID_REQ;
 
     struct httpd_req_aux *ra = r->aux;
     const char *httpd_hdr_str = "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n";
@@ -612,7 +611,7 @@ int http_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_afte
     }
 
     /* Receive data of remaining length */
-    int ret = ra->sd->recv_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0); //httpd_default_recv, returns number of bytes received
+    int ret = recv(ra->sd->fd, buf, buf_len, 0); //httpd_default_recv, returns number of bytes received
     if (ret < 0) {
         ESP_LOGD(TAG, LOG_FMT("error in recv_fn"));
         if ((ret == HTTPD_SOCK_ERR_TIMEOUT) && (pending_len != 0)) {
@@ -640,4 +639,100 @@ bool http_is_shutdown_complete(httpd_handle_t handle){
         return true;
     }
     return false;
+}
+
+esp_err_t http_resp_send_err(httpd_req_t *req, httpd_err_code_t error, const char *usr_msg)
+{
+    esp_err_t ret;
+    const char *msg;
+    const char *status;
+
+    switch (error) {
+        case HTTPD_501_METHOD_NOT_IMPLEMENTED:
+            status = "501 Method Not Implemented";
+            msg    = "Server does not support this method";
+            break;
+        case HTTPD_505_VERSION_NOT_SUPPORTED:
+            status = "505 Version Not Supported";
+            msg    = "HTTP version not supported by server";
+            break;
+        case HTTPD_400_BAD_REQUEST:
+            status = "400 Bad Request";
+            msg    = "Bad request syntax";
+            break;
+        case HTTPD_401_UNAUTHORIZED:
+            status = "401 Unauthorized";
+            msg    = "No permission -- see authorization schemes";
+            break;
+        case HTTPD_403_FORBIDDEN:
+            status = "403 Forbidden";
+            msg    = "Request forbidden -- authorization will not help";
+            break;
+        case HTTPD_404_NOT_FOUND:
+            status = "404 Not Found";
+            msg    = "Nothing matches the given URI";
+            break;
+        case HTTPD_405_METHOD_NOT_ALLOWED:
+            status = "405 Method Not Allowed";
+            msg    = "Specified method is invalid for this resource";
+            break;
+        case HTTPD_408_REQ_TIMEOUT:
+            status = "408 Request Timeout";
+            msg    = "Server closed this connection";
+            break;
+        case HTTPD_414_URI_TOO_LONG:
+            status = "414 URI Too Long";
+            msg    = "URI is too long";
+            break;
+        case HTTPD_411_LENGTH_REQUIRED:
+            status = "411 Length Required";
+            msg    = "Client must specify Content-Length";
+            break;
+        case HTTPD_431_REQ_HDR_FIELDS_TOO_LARGE:
+            status = "431 Request Header Fields Too Large";
+            msg    = "Header fields are too long";
+            break;
+        case HTTPD_500_INTERNAL_SERVER_ERROR:
+        default:
+            status = "500 Internal Server Error";
+            msg    = "Server has encountered an unexpected error";
+    }
+
+    /* If user has provided custom message, override default message */
+    msg = usr_msg ? usr_msg : msg;
+    ESP_LOGW(TAG, LOG_FMT("%s - %s"), status, msg);
+
+    /* Set error code in HTTP response */
+    //httpd_resp_set_status(req, status);
+    struct httpd_req_aux *ra = req->aux;
+    ra->status = (char *)status;
+    ra->content_type = (char *) HTTPD_TYPE_TEXT;
+    //httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
+
+    /* Send HTTP error message */
+    ret = http_resp_send(req, msg, HTTPD_RESP_USE_STRLEN);
+
+    return ret;
+}
+
+esp_err_t http_req_handle_err(httpd_req_t *req, httpd_err_code_t error)
+{
+    struct httpd_data *hd = (struct httpd_data *) req->handle;
+    esp_err_t ret;
+
+    /* Invoke custom error handler if configured */
+    if (hd->err_handler_fns[error]) {
+        ret = hd->err_handler_fns[error](req, error);
+
+        /* If error code is 500, force return failure
+         * irrespective of the handler's return value */
+        ret = (error == HTTPD_500_INTERNAL_SERVER_ERROR ? ESP_FAIL : ret);
+    } else {
+        /* If no handler is registered for this error default
+         * behavior is to send the HTTP error response and
+         * return failure for closure of underlying socket */
+        http_resp_send_err(req, error, NULL);
+        ret = ESP_FAIL;
+    }
+    return ret;
 }
