@@ -504,10 +504,11 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
         parser_data.raw_datalen = blk_len + offset;
 
         if ((offset = parse_block(&parser, offset, blk_len, full_req)) < 0) {
+            free(full_req);
             return http_req_handle_err(r, parser_data.error);
         }
     } while (parser_data.status != PARSING_COMPLETE);
-
+    free(full_req);
     ESP_LOGD(TAG, LOG_FMT("parsing complete"));
     return httpd_uri(hd);
 }

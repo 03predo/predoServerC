@@ -339,13 +339,13 @@ reexecute:
       case s_req_http_minor:
       {
         parser_state("s_req_http_minor", ch);
-        strncat(full_req, data, p-data+1);
-        char nl = '\n';
-        strncat(full_req, &nl, 1);
         if (ch == CR) {
+          strncat(full_req, data, p-data+1);
           p_state = (enum state) s_req_line_almost_done;
           break;
         }else if (ch == LF) {
+          char nl = '\n';
+          strncat(full_req, &nl, 1);
           p_state = (enum state) s_header_field_start;
           break;
         }
@@ -356,7 +356,7 @@ reexecute:
 
         parser->http_minor *= 10;
         parser->http_minor += ch - '0';
-
+        ESP_LOGI(TAG, LOG_FMT("data: %s, http_min: %d"), data, parser->http_minor);
         if (parser->http_minor > 999) {
           parser->http_errno = HPE_INVALID_VERSION;
           goto error;
@@ -370,6 +370,8 @@ reexecute:
           parser->http_errno = HPE_LF_EXPECTED;
           goto error;
         }
+        char nl = '\n';
+        strncat(full_req, &nl, 1);
         p_state = (enum state) s_header_field_start;
         break;
       }
@@ -410,6 +412,7 @@ reexecute:
         }
 
         parser->nread += p - start;
+        ESP_LOGI(TAG, LOG_FMT("nread: %d, max: %d"), parser->nread, HTTP_MAX_HEADER_SIZE);
         if (parser->nread > (HTTP_MAX_HEADER_SIZE)) {
           parser->http_errno = HPE_HEADER_OVERFLOW;
           goto error;
@@ -466,10 +469,6 @@ reexecute:
         p_state = (enum state) s_header_value;
         parser->index = 0;
 
-        if (memchr(valid, ch, 77) == NULL) {
-          parser->http_errno = HPE_INVALID_HEADER_TOKEN;
-          goto error;
-        }
         break;
       }
       case s_header_value:
@@ -641,6 +640,7 @@ error:
   if (HTTP_PARSER_ERRNO(parser) == HPE_OK) {
     parser->http_errno = HPE_UNKNOWN;
   }
+  
   parser->state = p_state;
   return (p - data);
 }
