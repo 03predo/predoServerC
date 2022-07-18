@@ -32,7 +32,7 @@ static httpd_uri_t predoServer = {
 
 static esp_err_t predo_server_stop(httpd_req_t *req){
     http_resp_send(req, stopHTML, HTTPD_RESP_USE_STRLEN);
-    http_stopper(req->handle);
+    http_queue_shutdown(req->handle);
     return ESP_OK;
 }
 

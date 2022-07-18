@@ -511,7 +511,7 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     return ESP_OK;
 }
 
-esp_err_t http_stopper(httpd_handle_t handle)
+esp_err_t http_queue_shutdown(httpd_handle_t handle)
 {
     struct httpd_data *hd = (struct httpd_data *) handle;
     if (hd == NULL) {
