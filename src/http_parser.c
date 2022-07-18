@@ -356,7 +356,6 @@ reexecute:
 
         parser->http_minor *= 10;
         parser->http_minor += ch - '0';
-        ESP_LOGI(TAG, LOG_FMT("data: %s, http_min: %d"), data, parser->http_minor);
         if (parser->http_minor > 999) {
           parser->http_errno = HPE_INVALID_VERSION;
           goto error;
@@ -412,7 +411,6 @@ reexecute:
         }
 
         parser->nread += p - start;
-        ESP_LOGI(TAG, LOG_FMT("nread: %d, max: %d"), parser->nread, HTTP_MAX_HEADER_SIZE);
         if (parser->nread > (HTTP_MAX_HEADER_SIZE)) {
           parser->http_errno = HPE_HEADER_OVERFLOW;
           goto error;
