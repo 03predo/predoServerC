@@ -9,7 +9,6 @@
 #include <sdkconfig.h>
 #include <esp_err.h>
 
-
 #define HTTPD_DEFAULT_CONFIG() {                        \
         .task_priority      = tskIDLE_PRIORITY+5,       \
         .stack_size         = 4096,                     \
@@ -23,8 +22,6 @@
         .lru_purge_enable   = false,                    \
         .recv_wait_timeout  = 5,                        \
         .send_wait_timeout  = 5,                        \
-        .global_user_ctx = NULL,                        \
-        .global_user_ctx_free_fn = NULL,                \
         .global_transport_ctx = NULL,                   \
         .global_transport_ctx_free_fn = NULL,           \
         .open_fn = NULL,                                \
@@ -140,22 +137,6 @@ typedef struct httpd_config {
     uint16_t    recv_wait_timeout;  /*!< Timeout for recv function (in seconds)*/
     uint16_t    send_wait_timeout;  /*!< Timeout for send function (in seconds)*/
 
-    /**
-     * Global user context.
-     *
-     * This field can be used to store arbitrary user data within the server context.
-     * The value can be retrieved using the server handle, available e.g. in the httpd_req_t struct.
-     *
-     * When shutting down, the server frees up the user context by
-     * calling free() on the global_user_ctx field. If you wish to use a custom
-     * function for freeing the global user context, please specify that here.
-     */
-    void * global_user_ctx;
-
-    /**
-     * Free function for global user context
-     */
-    httpd_free_ctx_fn_t global_user_ctx_free_fn;
 
     /**
      * Global transport context.
@@ -293,22 +274,6 @@ typedef struct httpd_req {
      */
     void *user_ctx;
 
-    /**
-     * Session Context Pointer
-     *
-     * A session context. Contexts are maintained across 'sessions' for a
-     * given open TCP connection. One session could have multiple request
-     * responses. The web server will ensure that the context persists
-     * across all these request and responses.
-     *
-     * By default, this is NULL. URI Handlers can set this to any meaningful
-     * value.
-     *
-     * If the underlying socket gets closed, and this pointer is non-NULL,
-     * the web server will free up the context by calling free(), unless
-     * free_ctx function is set.
-     */
-    //void *sess_ctx;
 
     /**
      * Pointer to free context hook
