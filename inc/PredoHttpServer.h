@@ -1,9 +1,3 @@
-/*
- * SPDX-FileCopyrightText: 2018-2021 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 #ifndef _ESP_HTTP_SERVER_H_
 #define _ESP_HTTP_SERVER_H_
 
@@ -15,10 +9,7 @@
 #include <sdkconfig.h>
 #include <esp_err.h>
 
-/*
-note: esp_https_server.h includes a customized copy of this
-initializer that should be kept in sync
-*/
+
 #define HTTPD_DEFAULT_CONFIG() {                        \
         .task_priority      = tskIDLE_PRIORITY+5,       \
         .stack_size         = 4096,                     \
@@ -51,8 +42,6 @@ initializer that should be kept in sync
 #define ESP_ERR_HTTPD_ALLOC_MEM         (ESP_ERR_HTTPD_BASE +  7)   /*!< Failed to dynamically allocate memory for resource */
 #define ESP_ERR_HTTPD_TASK              (ESP_ERR_HTTPD_BASE +  8)   /*!< Failed to launch server task/thread */
 
-/* Symbol to be used as length parameter in httpd_resp_send APIs
- * for setting buffer length to string length */
 #define HTTPD_RESP_USE_STRLEN -1
 
 /* ************** Group: Initialization ************** */
@@ -319,7 +308,7 @@ typedef struct httpd_req {
      * the web server will free up the context by calling free(), unless
      * free_ctx function is set.
      */
-    void *sess_ctx;
+    //void *sess_ctx;
 
     /**
      * Pointer to free context hook
