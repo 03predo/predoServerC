@@ -117,16 +117,6 @@ esp_err_t http_sess_new(struct httpd_data *hd, int newfd)
     session->send_fn = httpd_default_send;
     session->recv_fn = httpd_default_recv;
 
-    // Call user-defined session opening function
-    //this is default left null
-    if (hd->config.open_fn) {
-        esp_err_t ret = hd->config.open_fn(hd, session->fd);
-        if (ret != ESP_OK) {
-            http_sess_delete(hd, session);
-            ESP_LOGD(TAG, LOG_FMT("open_fn failed for fd = %d"), newfd);
-            return ret;
-        }
-    }
 
     // increment number of sessions
     hd->hd_sd_active_count++;

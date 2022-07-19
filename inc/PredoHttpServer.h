@@ -22,7 +22,6 @@
         .lru_purge_enable   = false,                    \
         .recv_wait_timeout  = 5,                        \
         .send_wait_timeout  = 5,                        \
-        .open_fn = NULL,                                \
         .close_fn = NULL,                               \
         .uri_match_fn = NULL                            \
 }
@@ -148,7 +147,6 @@ typedef struct httpd_config {
      *
      * Returning a value other than ESP_OK will immediately close the new socket.
      */
-    httpd_open_func_t open_fn;
 
     /**
      * Custom session closing callback.
