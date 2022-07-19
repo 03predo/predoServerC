@@ -126,33 +126,6 @@ esp_err_t http_sess_new(struct httpd_data *hd, int newfd)
     return ESP_OK;
 }
 
-// void http_sess_free_ctx(void **ctx, httpd_free_ctx_fn_t free_fn)
-// {
-//     if ((!ctx) || (!*ctx)) {
-//         return;
-//     }
-//     if (free_fn) {
-//         free_fn(*ctx);
-//     } else {
-//         free(*ctx);
-//     }
-//     *ctx = NULL;
-// }
-
-// void http_sess_clear_ctx(struct sock_db *session)
-// {
-//     if ((!session) || ((!session->ctx))){
-//         return;
-//     }
-
-//     // free user ctx
-//     if (session->ctx) {
-//         http_sess_free_ctx(&session->ctx, session->free_ctx);
-//         session->free_ctx = NULL;
-//     }
-
-// }
-
 void http_sess_delete(struct httpd_data *hd, struct sock_db *session)
 {
     if ((!hd) || (!session) || (session->fd < 0)) {
@@ -162,9 +135,6 @@ void http_sess_delete(struct httpd_data *hd, struct sock_db *session)
     ESP_LOGI(TAG, LOG_FMT("deleting session on fd %d"), session->fd);
 
     close(session->fd);    
-
-    // clear all contexts
-    //http_sess_clear_ctx(session);
 
     // mark session slot as available
     session->fd = -1;

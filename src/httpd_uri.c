@@ -35,9 +35,7 @@ static httpd_uri_t* httpd_find_uri_handler(struct httpd_data *hd, const char *ur
 
         /* Check if custom URI matching function is set,
          * else use simple string compare */
-        if (hd->config.uri_match_fn ?
-            hd->config.uri_match_fn(hd->hd_calls[i]->uri, uri, uri_len) :
-            httpd_uri_match_simple(hd->hd_calls[i]->uri, uri, uri_len)) {
+        if (httpd_uri_match_simple(hd->hd_calls[i]->uri, uri, uri_len)) {
             /* URIs match. Now check if method is supported */
             if (hd->hd_calls[i]->method == method) {
                 /* Match found! */

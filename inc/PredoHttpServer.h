@@ -22,7 +22,6 @@
         .lru_purge_enable   = false,                    \
         .recv_wait_timeout  = 5,                        \
         .send_wait_timeout  = 5,                        \
-        .uri_match_fn = NULL                            \
 }
 
 #define ESP_ERR_HTTPD_BASE              (0xb000)                    /*!< Starting number of HTTPD error codes */
@@ -133,54 +132,6 @@ typedef struct httpd_config {
     uint16_t    recv_wait_timeout;  /*!< Timeout for recv function (in seconds)*/
     uint16_t    send_wait_timeout;  /*!< Timeout for send function (in seconds)*/
 
-    /**
-     * Custom session opening callback.
-     *
-     * Called on a new session socket just after accept(), but before reading any data.
-     *
-     * This is an opportunity to set up e.g. SSL encryption using global_transport_ctx
-     * and the send/recv/pending session overrides.
-     *
-     * If a context needs to be maintained between these functions, store it in the session using
-     * httpd_sess_set_transport_ctx() and retrieve it later with httpd_sess_get_transport_ctx()
-     *
-     * Returning a value other than ESP_OK will immediately close the new socket.
-     */
-
-    /**
-     * Custom session closing callback.
-     *
-     * Called when a session is deleted, before freeing user and transport contexts and before
-     * closing the socket. This is a place for custom de-init code common to all sockets.
-     *
-     * The server will only close the socket if no custom session closing callback is set.
-     * If a custom callback is used, `close(sockfd)` should be called in here for most cases.
-     *
-     * Set the user or transport context to NULL if it was freed here, so the server does not
-     * try to free it again.
-     *
-     * This function is run for all terminated sessions, including sessions where the socket
-     * was closed by the network stack - that is, the file descriptor may not be valid anymore.
-     */
-    //httpd_close_func_t close_fn;
-
-    /**
-     * URI matcher function.
-     *
-     * Called when searching for a matching URI:
-     *     1) whose request handler is to be executed right
-     *        after an HTTP request is successfully parsed
-     *     2) in order to prevent duplication while registering
-     *        a new URI handler using `httpd_register_uri_handler()`
-     *
-     * Available options are:
-     *     1) NULL : Internally do basic matching using `strncmp()`
-     *     2) `httpd_uri_match_wildcard()` : URI wildcard matcher
-     *
-     * Users can implement their own matching functions (See description
-     * of the `httpd_uri_match_func_t` function prototype)
-     */
-    httpd_uri_match_func_t uri_match_fn;
 } httpd_config_t;
 
 /**
