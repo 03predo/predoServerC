@@ -22,8 +22,6 @@
         .lru_purge_enable   = false,                    \
         .recv_wait_timeout  = 5,                        \
         .send_wait_timeout  = 5,                        \
-        .global_transport_ctx = NULL,                   \
-        .global_transport_ctx_free_fn = NULL,           \
         .open_fn = NULL,                                \
         .close_fn = NULL,                               \
         .uri_match_fn = NULL                            \
@@ -136,20 +134,6 @@ typedef struct httpd_config {
     bool        lru_purge_enable;   /*!< Purge "Least Recently Used" connection */
     uint16_t    recv_wait_timeout;  /*!< Timeout for recv function (in seconds)*/
     uint16_t    send_wait_timeout;  /*!< Timeout for send function (in seconds)*/
-
-
-    /**
-     * Global transport context.
-     *
-     * Similar to global_user_ctx, but used for session encoding or encryption (e.g. to hold the SSL context).
-     * It will be freed using free(), unless global_transport_ctx_free_fn is specified.
-     */
-    void * global_transport_ctx;
-
-    /**
-     * Free function for global transport context
-     */
-    httpd_free_ctx_fn_t global_transport_ctx_free_fn;
 
     /**
      * Custom session opening callback.
