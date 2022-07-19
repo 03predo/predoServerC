@@ -22,7 +22,6 @@
         .lru_purge_enable   = false,                    \
         .recv_wait_timeout  = 5,                        \
         .send_wait_timeout  = 5,                        \
-        .close_fn = NULL,                               \
         .uri_match_fn = NULL                            \
 }
 
@@ -163,7 +162,7 @@ typedef struct httpd_config {
      * This function is run for all terminated sessions, including sessions where the socket
      * was closed by the network stack - that is, the file descriptor may not be valid anymore.
      */
-    httpd_close_func_t close_fn;
+    //httpd_close_func_t close_fn;
 
     /**
      * URI matcher function.

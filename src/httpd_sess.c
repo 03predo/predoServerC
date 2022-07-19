@@ -161,12 +161,7 @@ void http_sess_delete(struct httpd_data *hd, struct sock_db *session)
 
     ESP_LOGI(TAG, LOG_FMT("deleting session on fd %d"), session->fd);
 
-    // Call close function if defined
-    if (hd->config.close_fn) {
-        hd->config.close_fn(hd, session->fd);
-    } else {
-        close(session->fd);
-    }
+    close(session->fd);    
 
     // clear all contexts
     //http_sess_clear_ctx(session);
