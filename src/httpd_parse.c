@@ -543,16 +543,6 @@ static void httpd_req_cleanup(httpd_req_t *r)
 {
     struct httpd_req_aux *ra = r->aux;
 
-    /* Check if the context has changed and needs to be cleared */
-    if ((r->ignore_sess_ctx_changes == false) && (ra->sd->ctx != r->sess_ctx)) {
-        http_sess_free_ctx(ra->sd->ctx, ra->sd->free_ctx);
-    }
-
-    /* Retrieve session info from the request into the socket database. */
-    ra->sd->ctx = r->sess_ctx;
-    ra->sd->free_ctx = r->free_ctx;
-    ra->sd->ignore_sess_ctx_changes = r->ignore_sess_ctx_changes;
-
     /* Clear out the request and request_aux structures */
     ra->sd = NULL;
     r->handle = NULL;
