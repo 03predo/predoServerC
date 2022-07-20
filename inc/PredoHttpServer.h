@@ -73,21 +73,9 @@ typedef struct httpd_config {
 
 esp_err_t  HttpStart(httpd_handle_t *handle, const httpd_config_t *config);
 
-/* ************** Group: URI Handlers ************** */
-/** @name URI Handlers
- * APIs related to the URI handlers
- * @{
- */
-
-/* Max supported HTTP request header length */
 #define HTTPD_MAX_REQ_HDR_LEN CONFIG_HTTPD_MAX_REQ_HDR_LEN
-
-/* Max supported HTTP request URI length */
 #define HTTPD_MAX_URI_LEN CONFIG_HTTPD_MAX_URI_LEN
 
-/**
- * @brief HTTP Request Data Structure
- */
 typedef struct httpd_req {
     httpd_handle_t  handle;                     /*!< Handle to server instance */
     int             method;                     /*!< The type of HTTP request, -1 if unsupported method */
@@ -95,249 +83,35 @@ typedef struct httpd_req {
     size_t          content_len;                /*!< Length of the request body */
     void           *aux;                        /*!< Internally used members */
     void *user_ctx; //User context pointer passed during URI registration.
-
-    /**
-     * Flag indicating if Session Context changes should be ignored
-     *
-     * By default, if you change the sess_ctx in some URI handler, the http server
-     * will internally free the earlier context (if non NULL), after the URI handler
-     * returns. If you want to manage the allocation/reallocation/freeing of
-     * sess_ctx yourself, set this flag to true, so that the server will not
-     * perform any checks on it. The context will be cleared by the server
-     * (by calling free_ctx or free()) only if the socket gets closed.
-     */
-    bool ignore_sess_ctx_changes;
 } httpd_req_t;
 
-/**
- * @brief Structure for URI handler
- */
 typedef struct httpd_uri {
     const char       *uri;    /*!< The URI to handle */
     enum http_method    method; /*!< Method supported by the URI */
-
-    /**
-     * Handler to call for supported request method. This must
-     * return ESP_OK, or else the underlying socket will be closed.
-     */
     esp_err_t (*handler)(httpd_req_t *r);
-
-    /**
-     * Pointer to user context data which will be available to handler
-     */
     void *user_ctx;
 } httpd_uri_t;
 
-/**
- * @brief   Registers a URI handler
- *
- * @note    URI handlers can be registered in real time as long as the
- *          server handle is valid.
- *
- * Example usage:
- * @code{c}
- *
- * esp_err_t my_uri_handler(httpd_req_t* req)
- * {
- *     // Recv , Process and Send
- *     ....
- *     ....
- *     ....
- *
- *     // Fail condition
- *     if (....) {
- *         // Return fail to close session //
- *         return ESP_FAIL;
- *     }
- *
- *     // On success
- *     return ESP_OK;
- * }
- *
- * // URI handler structure
- * httpd_uri_t my_uri {
- *     .uri      = "/my_uri/path/xyz",
- *     .method   = HTTPD_GET,
- *     .handler  = my_uri_handler,
- *     .user_ctx = NULL
- * };
- *
- * // Register handler
- * if (httpd_register_uri_handler(server_handle, &my_uri) != ESP_OK) {
- *    // If failed to register handler
- *    ....
- * }
- *
- * @endcode
- *
- * @param[in] handle      handle to HTTPD server instance
- * @param[in] uri_handler pointer to handler that needs to be registered
- *
- * @return
- *  - ESP_OK : On successfully registering the handler
- *  - ESP_ERR_INVALID_ARG : Null arguments
- *  - ESP_ERR_HTTPD_HANDLERS_FULL  : If no slots left for new handler
- *  - ESP_ERR_HTTPD_HANDLER_EXISTS : If handler with same URI and
- *                                   method is already registered
- */
 esp_err_t httpd_register_uri_handler(httpd_handle_t handle,
                                      const httpd_uri_t *uri_handler);
 
-/**
- * @brief   Unregister a URI handler
- *
- * @param[in] handle    handle to HTTPD server instance
- * @param[in] uri       URI string
- * @param[in] method    HTTP method
- *
- * @return
- *  - ESP_OK : On successfully deregistering the handler
- *  - ESP_ERR_INVALID_ARG : Null arguments
- *  - ESP_ERR_NOT_FOUND   : Handler with specified URI and method not found
- */
-//esp_err_t httpd_unregister_uri_handler(httpd_handle_t handle,
-//                                       const char *uri, httpd_method_t method);
 
-/**
- * @brief   Unregister all URI handlers with the specified uri string
- *
- * @param[in] handle   handle to HTTPD server instance
- * @param[in] uri      uri string specifying all handlers that need
- *                     to be deregisterd
- *
- * @return
- *  - ESP_OK : On successfully deregistering all such handlers
- *  - ESP_ERR_INVALID_ARG : Null arguments
- *  - ESP_ERR_NOT_FOUND   : No handler registered with specified uri string
- */
-//esp_err_t httpd_unregister_uri(httpd_handle_t handle, const char* uri);
-
-/** End of URI Handlers
- * @}
- */
-
-/* ************** Group: HTTP Error ************** */
-/** @name HTTP Error
- * Prototype for HTTP errors and error handling functions
- * @{
- */
-
-/**
- * @brief Error codes sent as HTTP response in case of errors
- *        encountered during processing of an HTTP request
- */
 typedef enum {
-    /* For any unexpected errors during parsing, like unexpected
-     * state transitions, or unhandled errors.
-     */
     HTTPD_500_INTERNAL_SERVER_ERROR = 0,
-
-    /* For methods not supported by http_parser. Presently
-     * http_parser halts parsing when such methods are
-     * encountered and so the server responds with 400 Bad
-     * Request error instead.
-     */
     HTTPD_501_METHOD_NOT_IMPLEMENTED,
-
-    /* When HTTP version is not 1.1 */
     HTTPD_505_VERSION_NOT_SUPPORTED,
-
-    /* Returned when http_parser halts parsing due to incorrect
-     * syntax of request, unsupported method in request URI or
-     * due to chunked encoding / upgrade field present in headers
-     */
     HTTPD_400_BAD_REQUEST,
-
-    /* This response means the client must authenticate itself
-     * to get the requested response.
-     */
     HTTPD_401_UNAUTHORIZED,
-
-    /* The client does not have access rights to the content,
-     * so the server is refusing to give the requested resource.
-     * Unlike 401, the client's identity is known to the server.
-     */
     HTTPD_403_FORBIDDEN,
-
-    /* When requested URI is not found */
     HTTPD_404_NOT_FOUND,
-
-    /* When URI found, but method has no handler registered */
     HTTPD_405_METHOD_NOT_ALLOWED,
-
-    /* Intended for recv timeout. Presently it's being sent
-     * for other recv errors as well. Client should expect the
-     * server to immediately close the connection after
-     * responding with this.
-     */
     HTTPD_408_REQ_TIMEOUT,
-
-    /* Intended for responding to chunked encoding, which is
-     * not supported currently. Though unhandled http_parser
-     * callback for chunked request returns "400 Bad Request"
-     */
     HTTPD_411_LENGTH_REQUIRED,
-
-    /* URI length greater than CONFIG_HTTPD_MAX_URI_LEN */
     HTTPD_414_URI_TOO_LONG,
-
-    /* Headers section larger than CONFIG_HTTPD_MAX_REQ_HDR_LEN */
     HTTPD_431_REQ_HDR_FIELDS_TOO_LARGE,
-
-    /* Used internally for retrieving the total count of errors */
     HTTPD_ERR_CODE_MAX
 } httpd_err_code_t;
 
-/**
- * @brief  Function prototype for HTTP error handling.
- *
- * This function is executed upon HTTP errors generated during
- * internal processing of an HTTP request. This is used to override
- * the default behavior on error, which is to send HTTP error response
- * and close the underlying socket.
- *
- * @note
- *  - If implemented, the server will not automatically send out HTTP
- *    error response codes, therefore, httpd_resp_send_err() must be
- *    invoked inside this function if user wishes to generate HTTP
- *    error responses.
- *  - When invoked, the validity of `uri`, `method`, `content_len`
- *    and `user_ctx` fields of the httpd_req_t parameter is not
- *    guaranteed as the HTTP request may be partially received/parsed.
- *  - The function must return ESP_OK if underlying socket needs to
- *    be kept open. Any other value will ensure that the socket is
- *    closed. The return value is ignored when error is of type
- *    `HTTPD_500_INTERNAL_SERVER_ERROR` and the socket closed anyway.
- *
- * @param[in] req    HTTP request for which the error needs to be handled
- * @param[in] error  Error type
- *
- * @return
- *  - ESP_OK   : error handled successful
- *  - ESP_FAIL : failure indicates that the underlying socket needs to be closed
- */
-typedef esp_err_t (*httpd_err_handler_func_t)(httpd_req_t *req,
-                                              httpd_err_code_t error);
-
-/**
- * @brief  Function for registering HTTP error handlers
- *
- * This function maps a handler function to any supported error code
- * given by `httpd_err_code_t`. See prototype `httpd_err_handler_func_t`
- * above for details.
- *
- * @param[in] handle     HTTP server handle
- * @param[in] error      Error type
- * @param[in] handler_fn User implemented handler function
- *                       (Pass NULL to unset any previously set handler)
- *
- * @return
- *  - ESP_OK : handler registered successfully
- *  - ESP_ERR_INVALID_ARG : invalid error code or server handle
- */
-esp_err_t httpd_register_err_handler(httpd_handle_t handle,
-                                     httpd_err_code_t error,
-                                     httpd_err_handler_func_t handler_fn);
 
 /** End of HTTP Error
  * @}

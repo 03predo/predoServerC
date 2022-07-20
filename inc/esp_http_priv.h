@@ -83,9 +83,6 @@ struct httpd_data {
     struct httpd_req_aux hd_req_aux;        /*!< Additional data about the HTTPD request kept unexposed */
     uint64_t lru_counter;                   /*!< LRU counter */
     bool shutdown_complete;                 //will be true after server shutdown is complete
-
-    /* Array of registered error handler functions */
-    httpd_err_handler_func_t *err_handler_fns;
 };
 
 /*session functions*/

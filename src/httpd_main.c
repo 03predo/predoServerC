@@ -351,7 +351,7 @@ static void HttpDelete(struct httpd_data *hd)
 {
     struct httpd_req_aux *ra = &hd->hd_req_aux;
     /* Free memory of httpd instance data */
-    free(hd->err_handler_fns);
+    //free(hd->err_handler_fns);
     free(ra->resp_hdrs);
     free(hd->hd_sd);
 
@@ -407,13 +407,13 @@ esp_err_t HttpStart(httpd_handle_t *handle, const httpd_config_t *config)
     hd->hd_sd = calloc(config->max_open_sockets, sizeof(struct sock_db));
     struct httpd_req_aux *ra = &hd->hd_req_aux;
     ra->resp_hdrs = calloc(config->max_resp_headers, sizeof(struct resp_hdr));
-    hd->err_handler_fns = calloc(HTTPD_ERR_CODE_MAX, sizeof(httpd_err_handler_func_t));
+    //hd->err_handler_fns = calloc(HTTPD_ERR_CODE_MAX, sizeof(httpd_err_handler_func_t));
 
-    if((!hd->hd_calls) || (!hd->hd_sd) || (!ra->resp_hdrs) || (!hd->err_handler_fns)){
+    if((!hd->hd_calls) || (!hd->hd_sd) || (!ra->resp_hdrs)){
         if (!hd->hd_calls) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP URI handlers"));}
         if (!hd->hd_sd) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP session data"));}
         if (!ra->resp_hdrs) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP response headers"));}
-        if (!hd->err_handler_fns) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP error handlers"));}
+        //if (!hd->err_handler_fns) {ESP_LOGE(TAG, LOG_FMT("Failed to allocate memory for HTTP error handlers"));}
 
         free(ra->resp_hdrs);
         free(hd->hd_sd);
@@ -720,19 +720,8 @@ esp_err_t http_req_handle_err(httpd_req_t *req, httpd_err_code_t error)
     struct httpd_data *hd = (struct httpd_data *) req->handle;
     esp_err_t ret;
 
-    /* Invoke custom error handler if configured */
-    if (hd->err_handler_fns[error]) {
-        ret = hd->err_handler_fns[error](req, error);
-
-        /* If error code is 500, force return failure
-         * irrespective of the handler's return value */
-        ret = (error == HTTPD_500_INTERNAL_SERVER_ERROR ? ESP_FAIL : ret);
-    } else {
-        /* If no handler is registered for this error default
-         * behavior is to send the HTTP error response and
-         * return failure for closure of underlying socket */
-        http_resp_send_err(req, error, NULL);
-        ret = ESP_FAIL;
-    }
+    http_resp_send_err(req, error, NULL);
+    ret = ESP_FAIL;
+    
     return ret;
 }
