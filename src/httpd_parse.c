@@ -566,10 +566,7 @@ esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd)
     ra->status = (char *)HTTPD_200;
     ra->content_type = (char *)HTTPD_TYPE_TEXT;
     ra->first_chunk_sent = false;
-
-    /* Copy session info to the request */
-    //r->ignore_sess_ctx_changes = sd->ignore_sess_ctx_changes;
-
+    
     esp_err_t ret;
 
     /* Parse request */
@@ -579,6 +576,39 @@ esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd)
     }
     return ret;
 }
+
+int http_recv(httpd_req_t *r, char *buf, size_t buf_len)
+{
+    return http_recv_with_opt(r, buf, buf_len, false);
+}
+
+int http_req_recv(httpd_req_t *r, char *buf, size_t buf_len)
+{
+    if (r == NULL || buf == NULL) {
+        return HTTPD_SOCK_ERR_INVALID;
+    }
+
+    struct httpd_req_aux *ra = r->aux;
+    ESP_LOGD(TAG, LOG_FMT("remaining length = %d"), ra->remaining_len);
+
+    if (buf_len > ra->remaining_len) {
+        buf_len = ra->remaining_len;
+    }
+    if (buf_len == 0) {
+        return buf_len;
+    }
+
+    int ret = http_recv(r, buf, buf_len);
+    if (ret < 0) {
+        ESP_LOGD(TAG, LOG_FMT("error in httpd_recv"));
+        return ret;
+    }
+    ra->remaining_len -= ret;
+    ESP_LOGD(TAG, LOG_FMT("received length = %d"), ret);
+    return ret;
+}
+
+
 
 esp_err_t httpd_req_delete(struct httpd_data *hd)
 {
@@ -592,7 +622,7 @@ esp_err_t httpd_req_delete(struct httpd_data *hd)
          * enough to finish off the buffers fast */
         char dummy[CONFIG_HTTPD_PURGE_BUF_LEN];
         int recv_len = MIN(sizeof(dummy), ra->remaining_len);
-        recv_len = httpd_req_recv(r, dummy, recv_len);
+        recv_len = http_req_recv(r, dummy, recv_len);
         if (recv_len <= 0) {
             httpd_req_cleanup(r);
             return ESP_FAIL;
