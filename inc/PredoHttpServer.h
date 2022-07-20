@@ -50,80 +50,17 @@
 typedef void* httpd_handle_t;
 
 /**
- * @brief   HTTP Method Type wrapper over "enum http_method"
- *          available in "http_parser" library
- */
-typedef enum http_method httpd_method_t;
-
-/**
  * @brief  Prototype for freeing context data (if any)
  * @param[in] ctx   object to free
  */
 typedef void (*httpd_free_ctx_fn_t)(void *ctx);
 
-/**
- * @brief  Function prototype for opening a session.
- *
- * Called immediately after the socket was opened to set up the send/recv functions and
- * other parameters of the socket.
- *
- * @param[in] hd       server instance
- * @param[in] sockfd   session socket file descriptor
- * @return
- *  - ESP_OK   : On success
- *  - Any value other than ESP_OK will signal the server to close the socket immediately
- */
-typedef esp_err_t (*httpd_open_func_t)(httpd_handle_t hd, int sockfd);
-
-/**
- * @brief  Function prototype for closing a session.
- *
- * @note   It's possible that the socket descriptor is invalid at this point, the function
- *         is called for all terminated sessions. Ensure proper handling of return codes.
- *
- * @param[in] hd   server instance
- * @param[in] sockfd   session socket file descriptor
- */
-typedef void (*httpd_close_func_t)(httpd_handle_t hd, int sockfd);
-
-/**
- * @brief  Function prototype for URI matching.
- *
- * @param[in] reference_uri   URI/template with respect to which the other URI is matched
- * @param[in] uri_to_match    URI/template being matched to the reference URI/template
- * @param[in] match_upto      For specifying the actual length of `uri_to_match` up to
- *                            which the matching algorithm is to be applied (The maximum
- *                            value is `strlen(uri_to_match)`, independent of the length
- *                            of `reference_uri`)
- * @return true on match
- */
-typedef bool (*httpd_uri_match_func_t)(const char *reference_uri,
-                                       const char *uri_to_match,
-                                       size_t match_upto);
-
-/**
- * @brief   HTTP Server Configuration Structure
- *
- * @note    Use HTTPD_DEFAULT_CONFIG() to initialize the configuration
- *          to a default value and then modify only those fields that are
- *          specifically determined by the use case.
- */
 typedef struct httpd_config {
     unsigned    task_priority;      /*!< Priority of FreeRTOS task which runs the server */
     size_t      stack_size;         /*!< The maximum stack size allowed for the server task */
     BaseType_t  core_id;            /*!< The core the HTTP server task will run on */
-
-    /**
-     * TCP Port number for receiving and transmitting HTTP traffic
-     */
-    uint16_t    server_port;
-
-    /**
-     * UDP Port number for asynchronously exchanging control signals
-     * between various components of the server
-     */
-    uint16_t    ctrl_port;
-
+    uint16_t    server_port; // tcp port for receiving and transmitting HTTP traffic
+    uint16_t    ctrl_port; // UDP Port number for asynchronously exchanging control signals between various components of the server    
     uint16_t    max_open_sockets;   /*!< Max number of sockets/clients connected at any time*/
     uint16_t    max_uri_handlers;   /*!< Maximum allowed uri handlers */
     uint16_t    max_resp_headers;   /*!< Maximum allowed additional headers in HTTP response */
@@ -134,50 +71,7 @@ typedef struct httpd_config {
 
 } httpd_config_t;
 
-/**
- * @brief Starts the web server
- *
- * Create an instance of HTTP server and allocate memory/resources for it
- * depending upon the specified configuration.
- *
- * Example usage:
- * @code{c}
- *
- * //Function for starting the webserver
- * httpd_handle_t start_webserver(void)
- * {
- *      // Generate default configuration
- *      httpd_config_t config = HTTPD_DEFAULT_CONFIG();
- *
- *      // Empty handle to http_server
- *      httpd_handle_t server = NULL;
- *
- *      // Start the httpd server
- *      if (httpd_start(&server, &config) == ESP_OK) {
- *          // Register URI handlers
- *          httpd_register_uri_handler(server, &uri_get);
- *          httpd_register_uri_handler(server, &uri_post);
- *      }
- *      // If server failed to start, handle will be NULL
- *      return server;
- * }
- *
- * @endcode
- *
- * @param[in]  config   Configuration for new instance of the server
- * @param[out] handle   Handle to newly created instance of the server. NULL on error
- * @return
- *  - ESP_OK    : Instance created successfully
- *  - ESP_ERR_INVALID_ARG      : Null argument(s)
- *  - ESP_ERR_HTTPD_ALLOC_MEM  : Failed to allocate memory for instance
- *  - ESP_ERR_HTTPD_TASK       : Failed to launch server task
- */
 esp_err_t  HttpStart(httpd_handle_t *handle, const httpd_config_t *config);
-
-
-/** End of Group Initialization
- * @}
- */
 
 /* ************** Group: URI Handlers ************** */
 /** @name URI Handlers
@@ -200,23 +94,7 @@ typedef struct httpd_req {
     const char      uri[HTTPD_MAX_URI_LEN + 1]; /*!< The URI of this request (1 byte extra for null termination) */
     size_t          content_len;                /*!< Length of the request body */
     void           *aux;                        /*!< Internally used members */
-
-    /**
-     * User context pointer passed during URI registration.
-     */
-    void *user_ctx;
-
-
-    /**
-     * Pointer to free context hook
-     *
-     * Function to free session context
-     *
-     * If the web server's socket closes, it frees up the session context by
-     * calling free() on the sess_ctx member. If you wish to use a custom
-     * function for freeing the session context, please specify that here.
-     */
-    httpd_free_ctx_fn_t free_ctx;
+    void *user_ctx; //User context pointer passed during URI registration.
 
     /**
      * Flag indicating if Session Context changes should be ignored
@@ -236,7 +114,7 @@ typedef struct httpd_req {
  */
 typedef struct httpd_uri {
     const char       *uri;    /*!< The URI to handle */
-    httpd_method_t    method; /*!< Method supported by the URI */
+    enum http_method    method; /*!< Method supported by the URI */
 
     /**
      * Handler to call for supported request method. This must

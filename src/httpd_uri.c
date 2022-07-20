@@ -21,7 +21,7 @@ static bool httpd_uri_match_simple(const char *uri1, const char *uri2, size_t le
         (strncmp(uri1, uri2, len2) == 0);   // Then match actual URIs
 }
 
-static httpd_uri_t* httpd_find_uri_handler(struct httpd_data *hd, const char *uri, size_t uri_len, httpd_method_t method, httpd_err_code_t *err)
+static httpd_uri_t* httpd_find_uri_handler(struct httpd_data *hd, const char *uri, size_t uri_len, enum http_method method, httpd_err_code_t *err)
 {
     if (err) {
         *err = HTTPD_404_NOT_FOUND;

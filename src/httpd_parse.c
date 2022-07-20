@@ -521,7 +521,6 @@ static void init_req(httpd_req_t *r, httpd_config_t *config)
     r->content_len = 0;
     r->aux = 0;
     r->user_ctx = 0;
-    r->free_ctx = 0;
     r->ignore_sess_ctx_changes = 0;
 }
 
@@ -569,7 +568,6 @@ esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd)
     ra->first_chunk_sent = false;
 
     /* Copy session info to the request */
-    r->free_ctx = sd->free_ctx;
     r->ignore_sess_ctx_changes = sd->ignore_sess_ctx_changes;
 
     esp_err_t ret;
