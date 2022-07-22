@@ -715,13 +715,8 @@ esp_err_t http_resp_send_err(httpd_req_t *req, httpd_err_code_t error, const cha
 
 esp_err_t http_req_handle_err(httpd_req_t *req, httpd_err_code_t error)
 {
-    struct httpd_data *hd = (struct httpd_data *) req->handle;
-    esp_err_t ret;
-
     http_resp_send_err(req, error, NULL);
-    ret = ESP_FAIL;
-    
-    return ret;
+    return ESP_FAIL;
 }
 
 size_t http_unrecv(struct httpd_req *r, const char *buf, size_t buf_len)

@@ -9,6 +9,37 @@
 #include <sdkconfig.h>
 #include <esp_err.h>
 
+#define HTTPD_200      "200 OK"                     /*!< HTTP Response 200 */
+#define HTTPD_204      "204 No Content"             /*!< HTTP Response 204 */
+#define HTTPD_207      "207 Multi-Status"           /*!< HTTP Response 207 */
+#define HTTPD_400      "400 Bad Request"            /*!< HTTP Response 400 */
+#define HTTPD_404      "404 Not Found"              /*!< HTTP Response 404 */
+#define HTTPD_408      "408 Request Timeout"        /*!< HTTP Response 408 */
+#define HTTPD_500      "500 Internal Server Error"  /*!< HTTP Response 500 */
+
+#define HTTPD_TYPE_JSON   "application/json"            /*!< HTTP Content type JSON */
+#define HTTPD_TYPE_TEXT   "text/html"                   /*!< HTTP Content type text/HTML */
+#define HTTPD_TYPE_OCTET  "application/octet-stream"    /*!< HTTP Content type octext-stream */
+
+#define HTTPD_SOCK_ERR_FAIL      -1
+#define HTTPD_SOCK_ERR_INVALID   -2
+#define HTTPD_SOCK_ERR_TIMEOUT   -3
+
+#define ESP_ERR_HTTPD_BASE              (0xb000)                    /*!< Starting number of HTTPD error codes */
+#define ESP_ERR_HTTPD_HANDLERS_FULL     (ESP_ERR_HTTPD_BASE +  1)   /*!< All slots for registering URI handlers have been consumed */
+#define ESP_ERR_HTTPD_HANDLER_EXISTS    (ESP_ERR_HTTPD_BASE +  2)   /*!< URI handler with same method and target URI already registered */
+#define ESP_ERR_HTTPD_INVALID_REQ       (ESP_ERR_HTTPD_BASE +  3)   /*!< Invalid request pointer */
+#define ESP_ERR_HTTPD_RESULT_TRUNC      (ESP_ERR_HTTPD_BASE +  4)   /*!< Result string truncated */
+#define ESP_ERR_HTTPD_RESP_HDR          (ESP_ERR_HTTPD_BASE +  5)   /*!< Response header field larger than supported */
+#define ESP_ERR_HTTPD_RESP_SEND         (ESP_ERR_HTTPD_BASE +  6)   /*!< Error occured while sending response packet */
+#define ESP_ERR_HTTPD_ALLOC_MEM         (ESP_ERR_HTTPD_BASE +  7)   /*!< Failed to dynamically allocate memory for resource */
+#define ESP_ERR_HTTPD_TASK              (ESP_ERR_HTTPD_BASE +  8)   /*!< Failed to launch server task/thread */
+
+#define HTTPD_RESP_USE_STRLEN -1
+
+#define HTTPD_MAX_REQ_HDR_LEN CONFIG_HTTPD_MAX_REQ_HDR_LEN
+#define HTTPD_MAX_URI_LEN CONFIG_HTTPD_MAX_URI_LEN
+
 #define HTTPD_DEFAULT_CONFIG() {                        \
         .task_priority      = tskIDLE_PRIORITY+5,       \
         .stack_size         = 4096,                     \
@@ -24,35 +55,8 @@
         .send_wait_timeout  = 5,                        \
 }
 
-#define ESP_ERR_HTTPD_BASE              (0xb000)                    /*!< Starting number of HTTPD error codes */
-#define ESP_ERR_HTTPD_HANDLERS_FULL     (ESP_ERR_HTTPD_BASE +  1)   /*!< All slots for registering URI handlers have been consumed */
-#define ESP_ERR_HTTPD_HANDLER_EXISTS    (ESP_ERR_HTTPD_BASE +  2)   /*!< URI handler with same method and target URI already registered */
-#define ESP_ERR_HTTPD_INVALID_REQ       (ESP_ERR_HTTPD_BASE +  3)   /*!< Invalid request pointer */
-#define ESP_ERR_HTTPD_RESULT_TRUNC      (ESP_ERR_HTTPD_BASE +  4)   /*!< Result string truncated */
-#define ESP_ERR_HTTPD_RESP_HDR          (ESP_ERR_HTTPD_BASE +  5)   /*!< Response header field larger than supported */
-#define ESP_ERR_HTTPD_RESP_SEND         (ESP_ERR_HTTPD_BASE +  6)   /*!< Error occured while sending response packet */
-#define ESP_ERR_HTTPD_ALLOC_MEM         (ESP_ERR_HTTPD_BASE +  7)   /*!< Failed to dynamically allocate memory for resource */
-#define ESP_ERR_HTTPD_TASK              (ESP_ERR_HTTPD_BASE +  8)   /*!< Failed to launch server task/thread */
-
-#define HTTPD_RESP_USE_STRLEN -1
-
-/* ************** Group: Initialization ************** */
-/** @name Initialization
- * APIs related to the Initialization of the web server
- * @{
- */
-
-/**
- * @brief   HTTP Server Instance Handle
- *
- * Every instance of the server will have a unique handle.
- */
 typedef void* httpd_handle_t;
 
-/**
- * @brief  Prototype for freeing context data (if any)
- * @param[in] ctx   object to free
- */
 typedef void (*httpd_free_ctx_fn_t)(void *ctx);
 
 typedef struct httpd_config {
@@ -73,9 +77,6 @@ typedef struct httpd_config {
 
 esp_err_t  HttpStart(httpd_handle_t *handle, const httpd_config_t *config);
 
-#define HTTPD_MAX_REQ_HDR_LEN CONFIG_HTTPD_MAX_REQ_HDR_LEN
-#define HTTPD_MAX_URI_LEN CONFIG_HTTPD_MAX_URI_LEN
-
 typedef struct httpd_req {
     httpd_handle_t  handle;                     /*!< Handle to server instance */
     int             method;                     /*!< The type of HTTP request, -1 if unsupported method */
@@ -91,10 +92,6 @@ typedef struct httpd_uri {
     esp_err_t (*handler)(httpd_req_t *r);
     void *user_ctx;
 } httpd_uri_t;
-
-esp_err_t httpd_register_uri_handler(httpd_handle_t handle,
-                                     const httpd_uri_t *uri_handler);
-
 
 typedef enum {
     HTTPD_500_INTERNAL_SERVER_ERROR = 0,
@@ -112,32 +109,9 @@ typedef enum {
     HTTPD_ERR_CODE_MAX
 } httpd_err_code_t;
 
-#define HTTPD_SOCK_ERR_FAIL      -1
-#define HTTPD_SOCK_ERR_INVALID   -2
-#define HTTPD_SOCK_ERR_TIMEOUT   -3
-
-
-int httpd_req_recv(httpd_req_t *r, char *buf, size_t buf_len);
+esp_err_t httpd_register_uri_handler(httpd_handle_t handle, const httpd_uri_t *uri_handler);
 
 esp_err_t http_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len);
-
-#define HTTPD_200      "200 OK"                     /*!< HTTP Response 200 */
-#define HTTPD_204      "204 No Content"             /*!< HTTP Response 204 */
-#define HTTPD_207      "207 Multi-Status"           /*!< HTTP Response 207 */
-#define HTTPD_400      "400 Bad Request"            /*!< HTTP Response 400 */
-#define HTTPD_404      "404 Not Found"              /*!< HTTP Response 404 */
-#define HTTPD_408      "408 Request Timeout"        /*!< HTTP Response 408 */
-#define HTTPD_500      "500 Internal Server Error"  /*!< HTTP Response 500 */
-
-// esp_err_t httpd_resp_set_status(httpd_req_t *r, const char *status);
-
-#define HTTPD_TYPE_JSON   "application/json"            /*!< HTTP Content type JSON */
-#define HTTPD_TYPE_TEXT   "text/html"                   /*!< HTTP Content type text/HTML */
-#define HTTPD_TYPE_OCTET  "application/octet-stream"    /*!< HTTP Content type octext-stream */
-
-// esp_err_t httpd_resp_set_type(httpd_req_t *r, const char *type);
-
-// esp_err_t httpd_resp_set_hdr(httpd_req_t *r, const char *field, const char *value);
 
 esp_err_t httpd_resp_send_err(httpd_req_t *req, httpd_err_code_t error, const char *msg);
 
@@ -151,4 +125,4 @@ esp_err_t http_queue_shutdown(httpd_handle_t handle);
 
 bool http_is_shutdown_complete(httpd_handle_t handle);
 
-#endif /* ! _ESP_HTTP_SERVER_H_ */
+#endif

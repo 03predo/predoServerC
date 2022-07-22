@@ -93,10 +93,7 @@ void app_main(void){
     lcd_init();
 
     SevSegInit();
-    SevSegSetDigit(1, 0);
-    SevSegSetDigit(2, 0);
-    SevSegSetDigit(3, 0);
-    SevSegSetDigit(4, 1);
+    SevSegInt(0);
 
     unsigned short int status = 0;
     wifi_init_sta(wifi_event_group, &status);
