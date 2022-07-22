@@ -45,9 +45,6 @@ struct sock_db {
     httpd_handle_t handle;                  /*!< Server handle */
     httpd_free_ctx_fn_t free_ctx;      /*!< Function for freeing the context */
     httpd_free_ctx_fn_t free_transport_ctx; /*!< Function for freeing the 'transport' context */
-    httpd_send_func_t send_fn;              /*!< Send function for this socket */
-    httpd_recv_func_t recv_fn;              /*!< Receive function for this socket */
-    httpd_pending_func_t pending_fn;        /*!< Pending function for this socket */
     uint64_t lru_counter;                   /*!< LRU Counter indicating when the socket was last used */
     bool lru_socket;                        /*!< Flag indicating LRU socket */
     char pending_data[PARSER_BLOCK_SIZE];   /*!< Buffer for pending data to be received */
@@ -178,7 +175,7 @@ int http_recv_with_opt(httpd_req_t *r, char *buf, size_t buf_len, bool halt_afte
  *
  * @return  Length of data copied into pending buffer
  */
-size_t httpd_unrecv(struct httpd_req *r, const char *buf, size_t buf_len);
+size_t http_unrecv(struct httpd_req *r, const char *buf, size_t buf_len);
 
 /**
  * @brief   This is the low level default send function of the HTTPD. This should

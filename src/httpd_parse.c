@@ -139,7 +139,8 @@ static esp_err_t pause_parsing(http_parser *parser, const char* at)
     /* Push back the un-parsed data into pending buffer for
      * receiving again with http_recv_with_opt() later when
      * read_block() executes */
-    if (unparsed && (unparsed != httpd_unrecv(r, at, unparsed))) {
+    ESP_LOGD(TAG, LOG_FMT("un-recv = %d"), unparsed);
+    if (unparsed && (unparsed != http_unrecv(r, at, unparsed))) {
         ESP_LOGE(TAG, LOG_FMT("data too large for un-recv = %d"), unparsed);
         return ESP_FAIL;
     }
@@ -566,7 +567,7 @@ esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd)
     ra->status = (char *)HTTPD_200;
     ra->content_type = (char *)HTTPD_TYPE_TEXT;
     ra->first_chunk_sent = false;
-    
+
     esp_err_t ret;
 
     /* Parse request */

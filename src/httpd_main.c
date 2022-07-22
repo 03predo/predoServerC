@@ -161,8 +161,6 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
     ESP_LOGD(TAG, LOG_FMT("adding new session data"));
     session->fd = new_fd;
     session->handle = (httpd_handle_t) hd;
-    session->send_fn = httpd_default_send;
-    session->recv_fn = httpd_default_recv;
 
 
     ESP_LOGI(TAG, LOG_FMT("fd %d connection complete"), session->fd);
@@ -538,7 +536,7 @@ static esp_err_t httpd_send_all(httpd_req_t *r, const char *buf, size_t buf_len)
 
     while (buf_len > 0) {
         ESP_LOGD(TAG, LOG_FMT("%s"), buf);
-        ret = ra->sd->send_fn(ra->sd->handle, ra->sd->fd, buf, buf_len, 0);
+        ret = send(ra->sd->fd, buf, buf_len, 0);
         if (ret < 0) {
             ESP_LOGD(TAG, LOG_FMT("error in send_fn"));
             return ESP_FAIL;
@@ -580,7 +578,7 @@ static size_t httpd_recv_pending(httpd_req_t *r, char *buf, size_t buf_len)
     ESP_LOGD(TAG, LOG_FMT("offset: %d"), offset);
     /* buf_len must not be greater than remaining_len */
     buf_len = MIN(ra->sd->pending_len, buf_len);
-    memcpy(buf, ra->sd->pending_data + offset, buf_len);// why are we shifting pending_data forward by the offset, does it fill from back 
+    memcpy(buf, ra->sd->pending_data + offset, buf_len);
 
     ra->sd->pending_len -= buf_len;
     return buf_len;
@@ -724,4 +722,18 @@ esp_err_t http_req_handle_err(httpd_req_t *req, httpd_err_code_t error)
     ret = ESP_FAIL;
     
     return ret;
+}
+
+size_t http_unrecv(struct httpd_req *r, const char *buf, size_t buf_len)
+{
+    struct httpd_req_aux *ra = r->aux;
+    /* Truncate if external buf_len is greater than pending_data buffer size */
+    ra->sd->pending_len = MIN(sizeof(ra->sd->pending_data), buf_len);
+
+    /* Copy data into internal pending_data buffer with the exact offset
+     * such that it is right aligned inside the buffer */
+    size_t offset = sizeof(ra->sd->pending_data) - ra->sd->pending_len;
+    memcpy(ra->sd->pending_data + offset, buf, ra->sd->pending_len);
+    ESP_LOGD(TAG, LOG_FMT("length = %d"), ra->sd->pending_len);
+    return ra->sd->pending_len;
 }

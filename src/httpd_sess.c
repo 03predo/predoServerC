@@ -114,8 +114,6 @@ esp_err_t http_sess_new(struct httpd_data *hd, int newfd)
     memset(session, 0, sizeof (struct sock_db));
     session->fd = newfd;
     session->handle = (httpd_handle_t) hd;
-    session->send_fn = httpd_default_send;
-    session->recv_fn = httpd_default_recv;
 
 
     // increment number of sessions
