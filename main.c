@@ -1,7 +1,8 @@
 #include "main.h"
+#define DEBUG_MODE false
 
 static const char* TAG = "main";
-char predoServerHTML[500];
+char predoServerHTML[750];
 char stopHTML[500];
 
 static esp_err_t favicon_get_handler(httpd_req_t *req)
@@ -23,10 +24,56 @@ static esp_err_t predo_get_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static httpd_uri_t predoServer = {
+static httpd_uri_t predoServerGET = {
     .uri = "/predoServer",
     .method = HTTP_GET,
     .handler = predo_get_handler,
+    .user_ctx = "PREDO SERVER"
+};
+
+static esp_err_t predo_post_handler(httpd_req_t *req){
+
+    http_resp_send(req, predoServerHTML, HTTPD_RESP_USE_STRLEN);
+    char form_field[5] = "lcd=";
+    if(req->content_len < 4 && strncmp(form_field, req->content, 4) != 0){
+        ESP_LOGW(TAG, "bad post request");
+        return ESP_FAIL;
+    }
+    ESP_LOGD(TAG, LOG_FMT("req->content: %.*s"), req->content_len, req->content);
+    char*  content = calloc(req->content_len, sizeof(char));
+    memcpy(content, req->content + 4, req->content_len - 4);
+    ESP_LOGD(TAG, LOG_FMT("content: %s"), content);
+    char * to_lcd = calloc(req->content_len, sizeof(char));
+    if(strchr(content, '+') != NULL){
+        char * token;
+        const char s[2] = "+";
+        token = strtok(content, s);
+        ESP_LOGD(TAG, LOG_FMT("token: %s"), token);
+        strcat(to_lcd, token);
+        strcat(to_lcd, " ");
+        token = strtok(NULL, s);
+        while(token != NULL){
+            strcat(to_lcd, token);
+            strcat(to_lcd, " ");
+            ESP_LOGD(TAG, LOG_FMT("token: %s"), token);
+            token = strtok(NULL, s);
+            
+        }
+    }else{
+        memcpy(to_lcd, content, req->content_len - 4);
+    }
+    ESP_LOGD(TAG, LOG_FMT("to_lcd: %s"), to_lcd);
+    lcd_init();
+    lcd_send_string(to_lcd);
+    free(to_lcd);
+    free(content);
+    return ESP_OK;
+}
+
+static httpd_uri_t predoServerPOST = {
+    .uri = "/predoServer",
+    .method = HTTP_POST,
+    .handler = predo_post_handler,
     .user_ctx = "PREDO SERVER"
 };
 
@@ -44,13 +91,14 @@ static httpd_uri_t predoStop = {
 };
 
 void app_main(void){
-    // esp_log_level_set("main", ESP_LOG_DEBUG);
-    // esp_log_level_set("httpd", ESP_LOG_DEBUG);
-    // esp_log_level_set("httpd_sess", ESP_LOG_DEBUG);
-    // esp_log_level_set("httpd_uri", ESP_LOG_DEBUG);
-    // esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
-    // esp_log_level_set("httpd_parser", ESP_LOG_DEBUG);
-
+    if(DEBUG_MODE){
+        esp_log_level_set("main", ESP_LOG_DEBUG);
+        esp_log_level_set("httpd", ESP_LOG_DEBUG);
+        esp_log_level_set("httpd_sess", ESP_LOG_DEBUG);
+        esp_log_level_set("httpd_uri", ESP_LOG_DEBUG);
+        esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
+        esp_log_level_set("httpd_parser", ESP_LOG_DEBUG);
+    }
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -135,7 +183,8 @@ void app_main(void){
     if (HttpStart(&server, &config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        httpd_register_uri_handler(server, &predoServer);
+        httpd_register_uri_handler(server, &predoServerGET);
+        httpd_register_uri_handler(server, &predoServerPOST);
         httpd_register_uri_handler(server, &predoStop);
         httpd_register_uri_handler(server, &predoFavicon);
         ESP_LOGI(TAG, "Server Started");

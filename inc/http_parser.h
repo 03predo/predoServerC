@@ -30,6 +30,7 @@ extern "C" {
 #define HTTP_PARSER_VERSION_PATCH 0
 
 #include <sys/types.h>
+#include <stdbool.h>
 #if defined(_WIN32) && !defined(__MINGW32__) && \
   (!defined(_MSC_VER) || _MSC_VER<1600) && !defined(__WINE__)
 #include <BaseTsd.h>
@@ -266,8 +267,10 @@ struct http_parser {
   unsigned int lenient_http_headers : 1;
 
   uint32_t nread;          /* # bytes read in various scenarios */
+  bool has_content_length;
+  bool has_body;
   uint64_t content_length; /* # bytes in body (0 if no Content-Length header) */
-
+  char * body_mark;
   /** READ-ONLY **/
   unsigned short http_major;
   unsigned short http_minor;

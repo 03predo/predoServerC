@@ -240,6 +240,13 @@ static esp_err_t cb_header_value(http_parser *parser, const char *at, size_t len
             while (*(++at_adj) == ' ');
             parser_data->last.at = at_adj;
         }
+        if(parser->has_content_length){
+            parser->content_length = atoi(at);
+            ESP_LOGI(TAG, LOG_FMT("con_len: %llu"), parser->content_length);
+            if(parser->content_length > 0){
+                parser->has_body = true;
+            }
+        }
     } else if (parser_data->status != PARSING_HDR_VALUE) {
         ESP_LOGE(TAG, LOG_FMT("unexpected state transition"));
         parser_data->error = HTTPD_500_INTERNAL_SERVER_ERROR;
@@ -348,13 +355,48 @@ static esp_err_t cb_no_body(http_parser *parser)
     return ESP_OK;
 }
 
+static esp_err_t cb_on_body(http_parser *parser, const char *at, size_t length)
+{
+    parser_data_t *parser_data = (parser_data_t *) parser->data;
+    struct httpd_req *r        = parser_data->req;
+    ESP_LOGD(TAG, LOG_FMT("body begins, p=%p, len=%d"), at, length);
+    /* Check previous status */
+    if (parser_data->status != PARSING_BODY) {
+        ESP_LOGE(TAG, LOG_FMT("unexpected state transition"));
+        parser_data->error = HTTPD_500_INTERNAL_SERVER_ERROR;
+        parser_data->status = PARSING_FAILED;
+        return ESP_FAIL;
+    }
+
+    /* Pause parsing so that if part of another packet
+     * is in queue then it doesn't get parsed, which
+     * may reset the parser state and cause current
+     * request packet to be lost */
+    if (pause_parsing(parser, at) != ESP_OK) {
+        parser_data->error = HTTPD_500_INTERNAL_SERVER_ERROR;
+        parser_data->status = PARSING_FAILED;
+        return ESP_FAIL;
+    }
+
+    parser_data->last.at     = 0;
+    parser_data->last.length = 0;
+    parser_data->status      = PARSING_COMPLETE;
+    r->content = at;
+    ESP_LOGD(TAG, LOG_FMT("processing value = %.*s"), length, at);
+    return ESP_OK;
+}
+
 static int read_block(httpd_req_t *req, size_t offset, size_t length)
 {
     struct httpd_req_aux *raux  = req->aux;
 
     /* Limits the read to scratch buffer size */
+    ESP_LOGD(TAG, LOG_FMT("length: %d"), length);
+    ESP_LOGD(TAG, LOG_FMT("scratch: %d"), (sizeof(raux->scratch)));
+    ESP_LOGD(TAG, LOG_FMT("offset: %d"), offset);
     ssize_t buf_len = MIN(length, (sizeof(raux->scratch) - offset));
     if (buf_len <= 0) {
+        ESP_LOGD(TAG, LOG_FMT("returning 0"));
         return 0;
     }
 
@@ -480,6 +522,7 @@ static void parse_init(httpd_req_t *r, http_parser *parser, parser_data_t *data)
     data->settings.on_header_field     = cb_header_field;
     data->settings.on_header_value     = cb_header_value;
     data->settings.on_headers_complete = cb_headers_complete;
+    data->settings.on_body             = cb_on_body;
     data->settings.on_message_complete = cb_no_body;
 }
 
@@ -496,12 +539,14 @@ static esp_err_t httpd_parse_req(struct httpd_data *hd)
     offset = 0;
     do {
         // Read block into scratch buffer
+        
         if ((blk_len = read_block(r, offset, PARSER_BLOCK_SIZE)) < 0) {
             if (blk_len == HTTPD_SOCK_ERR_TIMEOUT) {
                 continue;
             }
             return ESP_FAIL;
         }
+        ESP_LOGD(TAG, LOG_FMT("read block: %d"), blk_len);
         parser_data.raw_datalen = blk_len + offset;
 
         if ((offset = parse_block(&parser, offset, blk_len, full_req)) < 0) {

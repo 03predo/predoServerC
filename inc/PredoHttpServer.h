@@ -82,6 +82,7 @@ typedef struct httpd_req {
     int             method;                     /*!< The type of HTTP request, -1 if unsupported method */
     const char      uri[HTTPD_MAX_URI_LEN + 1]; /*!< The URI of this request (1 byte extra for null termination) */
     size_t          content_len;                /*!< Length of the request body */
+    char           *content;
     void           *aux;                        /*!< Internally used members */
     void *user_ctx; //User context pointer passed during URI registration.
 } httpd_req_t;

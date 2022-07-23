@@ -31,6 +31,7 @@
 #include <string.h>
 #include <limits.h>
 
+
 #define CR                  '\r'
 #define LF                  '\n'
 
@@ -78,6 +79,7 @@ enum state
   , s_headers_almost_done
   , s_headers_done
   , s_message_done
+  , s_body
   };
 
 static void parser_state(char * state, char ch){
@@ -123,6 +125,7 @@ size_t http_parser_execute (http_parser *parser, const http_parser_settings *set
   const char *header_field_mark = 0;
   const char *header_value_mark = 0;
   const char *url_mark = 0;
+  const char *body_mark = 0;
   enum state p_state = (enum state) parser->state;
   /* We're in an error state. Don't bother doing anything. */
   if (parser->http_errno != HPE_OK) return 0;
@@ -140,6 +143,7 @@ size_t http_parser_execute (http_parser *parser, const http_parser_settings *set
   if (p_state == s_header_field) header_field_mark = data;
   if (p_state == s_header_value) header_value_mark = data;
   if (p_state == s_req_path) url_mark = data;
+  if (p_state == s_body) body_mark = parser->body_mark;
 
   ESP_LOGD(TAG, LOG_FMT("data:\n%s"), data);
   
@@ -165,6 +169,8 @@ reexecute:
         parser->index = 1;
         if(ch == 'G'){
           parser->method = HTTP_GET; 
+        }else if(ch == 'P'){
+          parser->method = HTTP_POST; 
         }else{
           parser->http_errno = HPE_INVALID_METHOD;
           goto error;
@@ -179,14 +185,24 @@ reexecute:
           parser->http_errno = HPE_INVALID_METHOD;
           goto error;
         }
-
-        if ((parser->index == 1 && ch == 'E') || (parser->index == 2 && ch == 'T')) {
-          ++parser->index;
-        }else if (parser->index == 3 && ch == ' '){
-          p_state = (enum state)s_req_spaces_before_url;
-        } else {
-          parser->http_errno = HPE_INVALID_METHOD;
-          goto error;
+        if(parser->method == HTTP_GET){
+          if ((parser->index == 1 && ch == 'E') || (parser->index == 2 && ch == 'T')) {
+            ++parser->index;
+          }else if (parser->index == 3 && ch == ' '){
+            p_state = (enum state)s_req_spaces_before_url;
+          } else {
+            parser->http_errno = HPE_INVALID_METHOD;
+            goto error;
+          }
+        }else if(parser->method == HTTP_POST){
+          if ((parser->index == 1 && ch == 'O') || (parser->index == 2 && ch == 'S') || (parser->index == 3 && ch == 'T')) {
+            ++parser->index;
+          }else if (parser->index == 4 && ch == ' '){
+            p_state = (enum state)s_req_spaces_before_url;
+          } else {
+            parser->http_errno = HPE_INVALID_METHOD;
+            goto error;
+          }
         }
         break;
       }
@@ -391,9 +407,13 @@ reexecute:
           parser->http_errno = HPE_INVALID_HEADER_TOKEN;
           goto error;
         }
-
+        if (ch == 'C' || ch == 'c'){
+          parser->has_content_length = true;
+        }else{
+          parser->has_content_length = false;
+        }
         if (!header_field_mark) { header_field_mark = p; }
-        parser->index = 0;
+        parser->index = 1;
         p_state = (enum state) s_header_field;
         break;
       }
@@ -407,7 +427,27 @@ reexecute:
             strncat(full_req, header_field_mark, p-header_field_mark+1);
             break;
           }
-
+          if(parser->has_content_length){
+            if((ch == 'o' && parser->index == 1) ||
+              (ch == 'n' && parser->index == 2) ||
+              (ch == 't' && parser->index == 3) ||
+              (ch == 'e' && parser->index == 4) ||
+              (ch == 'n' && parser->index == 5) ||
+              (ch == 't' && parser->index == 6) ||
+              (ch == '-' && parser->index == 7) ||
+              (ch == 'L' && parser->index == 8) ||
+              (ch == 'e' && parser->index == 9) ||
+              (ch == 'n' && parser->index == 10) ||
+              (ch == 'g' && parser->index == 11) ||
+              (ch == 't' && parser->index == 12) ||
+              (ch == 'h' && parser->index == 13) ||
+              (ch == ':' && parser->index == 14)){
+                ESP_LOGI(TAG, LOG_FMT("ch: %c, pi: %d"), ch, parser->index);
+                parser->index += 1;
+            }else{
+              parser->has_content_length = false;
+            }
+          }
         }
 
         parser->nread += p - start;
@@ -529,11 +569,13 @@ reexecute:
         }
 
         parser->nread += p - start;
+        ESP_LOGI(TAG, LOG_FMT("parser->nread: %d"), parser->nread);
         if (parser->nread > (HTTP_MAX_HEADER_SIZE)) {
+          ESP_LOGI(TAG, LOG_FMT("overflow"));
           parser->http_errno = HPE_HEADER_OVERFLOW;
           goto error;
         }
-
+        ESP_LOGI(TAG, LOG_FMT("past overflow"));
         if (p == data + len)
           --p;
         break;
@@ -614,15 +656,75 @@ reexecute:
         parser_state("s_headers_done", ch);
         ESP_LOGI(TAG, LOG_FMT("parsed request of length %d\n\n%s"), overall_len, full_req);
         overall_len = 0;
+        ESP_LOGI(TAG, LOG_FMT("before"));
+        if(parser->has_body){
+          ESP_LOGI(TAG, LOG_FMT("has_body"));
+          p_state = (enum state) s_body;
+          break;
+        }else{
+          if (ch != '\n'){ parser->http_errno = HPE_STRICT; goto error;}
+          parser->state = p_state;
+          if (0 != settings->on_message_complete(parser)) parser->http_errno = HPE_CB_message_complete;
+          p_state = (enum state) (parser->state);
+          if (HTTP_PARSER_ERRNO(parser) != HPE_OK) return (p - data + 1);
+          parser->state = (enum state) s_message_done;
+        }
+        
+        break;
+      }
+      case s_body:
+      {
+        parser_state("s_body", ch);
+        uint64_t to_read = MIN(parser->content_length,
+                               (uint64_t) ((data + len) - p));
+
+        assert(parser->content_length != 0
+            && parser->content_length != ULLONG_MAX);
+        if(body_mark == 0){
+          parser_state("body_mark", ch);
+          body_mark = p;
+        }
+
+        parser->content_length -= to_read;
+        p += to_read - 1;
+        
+        if (parser->content_length == 0) {
+          ESP_LOGI(TAG, "here");
+          p_state = (enum state) s_message_done;
+
+          /* Mimic CALLBACK_DATA_NOADVANCE() but with one extra byte.
+           *
+           * The alternative to doing this is to wait for the next byte to
+           * trigger the data callback, just as in every other case. The
+           * problem with this is that this makes it difficult for the test
+           * harness to distinguish between complete-on-EOF and
+           * complete-on-length. It's not clear that this distinction is
+           * important for applications, but let's keep it for now.
+           */
+          parser->state = p_state;
+          if (0 != settings->on_body(parser, body_mark, p - body_mark + 1)){
+            ESP_LOGI(TAG, "err");
+            parser->http_errno = HPE_CB_message_complete;
+          } 
+          p_state = (enum state) (parser->state);
+          if (HTTP_PARSER_ERRNO(parser) != HPE_OK) return (p - data + 1);
+          ESP_LOGI(TAG, "past err");
+          parser->state = p_state;
+          goto reexecute;
+        }
+        parser->body_mark = body_mark;
+        ESP_LOGI(TAG, "breaking");
+        break;
+      }
+      case s_message_done:
+        p_state = (enum state) s_start_req;
         if (ch != '\n'){ parser->http_errno = HPE_STRICT; goto error;}
         parser->state = p_state;
         if (0 != settings->on_message_complete(parser)) parser->http_errno = HPE_CB_message_complete;
         p_state = (enum state) (parser->state);
         if (HTTP_PARSER_ERRNO(parser) != HPE_OK) return (p - data + 1);
         parser->state = p_state;
-        return ((p - data) + 1);
         break;
-      }
       default:
       {
         assert(0 && "unhandled state");
