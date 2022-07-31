@@ -270,7 +270,7 @@ struct http_parser {
   bool has_content_length;
   bool has_body;
   uint64_t content_length; /* # bytes in body (0 if no Content-Length header) */
-  char * body_mark;
+  const char * body_mark;
   /** READ-ONLY **/
   unsigned short http_major;
   unsigned short http_minor;

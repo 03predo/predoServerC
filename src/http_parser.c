@@ -442,7 +442,7 @@ reexecute:
               (ch == 't' && parser->index == 12) ||
               (ch == 'h' && parser->index == 13) ||
               (ch == ':' && parser->index == 14)){
-                ESP_LOGI(TAG, LOG_FMT("ch: %c, pi: %d"), ch, parser->index);
+                ESP_LOGD(TAG, LOG_FMT("content-length, ch: %c, parse_indx: %d"), ch, parser->index);
                 parser->index += 1;
             }else{
               parser->has_content_length = false;
@@ -569,13 +569,10 @@ reexecute:
         }
 
         parser->nread += p - start;
-        ESP_LOGI(TAG, LOG_FMT("parser->nread: %d"), parser->nread);
         if (parser->nread > (HTTP_MAX_HEADER_SIZE)) {
-          ESP_LOGI(TAG, LOG_FMT("overflow"));
           parser->http_errno = HPE_HEADER_OVERFLOW;
           goto error;
         }
-        ESP_LOGI(TAG, LOG_FMT("past overflow"));
         if (p == data + len)
           --p;
         break;
@@ -654,14 +651,12 @@ reexecute:
       case s_headers_done:
       {
         parser_state("s_headers_done", ch);
-        ESP_LOGI(TAG, LOG_FMT("parsed request of length %d\n\n%s"), overall_len, full_req);
-        overall_len = 0;
-        ESP_LOGI(TAG, LOG_FMT("before"));
         if(parser->has_body){
-          ESP_LOGI(TAG, LOG_FMT("has_body"));
           p_state = (enum state) s_body;
           break;
         }else{
+          ESP_LOGI(TAG, LOG_FMT("parsed request of length %d\n\n%s"), overall_len, full_req);
+          overall_len = 0;
           if (ch != '\n'){ parser->http_errno = HPE_STRICT; goto error;}
           parser->state = p_state;
           if (0 != settings->on_message_complete(parser)) parser->http_errno = HPE_CB_message_complete;
@@ -689,7 +684,6 @@ reexecute:
         p += to_read - 1;
         
         if (parser->content_length == 0) {
-          ESP_LOGI(TAG, "here");
           p_state = (enum state) s_message_done;
 
           /* Mimic CALLBACK_DATA_NOADVANCE() but with one extra byte.
@@ -702,18 +696,18 @@ reexecute:
            * important for applications, but let's keep it for now.
            */
           parser->state = p_state;
+          strncat(full_req, body_mark, p-body_mark+1);
+          ESP_LOGI(TAG, LOG_FMT("parsed request of length %d\n\n%s"), overall_len, full_req);
           if (0 != settings->on_body(parser, body_mark, p - body_mark + 1)){
-            ESP_LOGI(TAG, "err");
             parser->http_errno = HPE_CB_message_complete;
           } 
           p_state = (enum state) (parser->state);
           if (HTTP_PARSER_ERRNO(parser) != HPE_OK) return (p - data + 1);
-          ESP_LOGI(TAG, "past err");
           parser->state = p_state;
+          overall_len = 0;
           goto reexecute;
         }
         parser->body_mark = body_mark;
-        ESP_LOGI(TAG, "breaking");
         break;
       }
       case s_message_done:

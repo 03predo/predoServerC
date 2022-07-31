@@ -41,20 +41,20 @@ static esp_err_t predo_post_handler(httpd_req_t *req){
     }
     ESP_LOGD(TAG, LOG_FMT("req->content: %.*s"), req->content_len, req->content);
     char*  content = calloc(req->content_len, sizeof(char));
+    char * to_lcd = calloc(req->content_len, sizeof(char));
     memcpy(content, req->content + 4, req->content_len - 4);
     ESP_LOGD(TAG, LOG_FMT("content: %s"), content);
-    char * to_lcd = calloc(req->content_len, sizeof(char));
+    
     if(strchr(content, '+') != NULL){
         char * token;
         const char s[2] = "+";
         token = strtok(content, s);
         ESP_LOGD(TAG, LOG_FMT("token: %s"), token);
         strcat(to_lcd, token);
-        strcat(to_lcd, " ");
         token = strtok(NULL, s);
         while(token != NULL){
-            strcat(to_lcd, token);
             strcat(to_lcd, " ");
+            strcat(to_lcd, token);
             ESP_LOGD(TAG, LOG_FMT("token: %s"), token);
             token = strtok(NULL, s);
             
@@ -62,8 +62,11 @@ static esp_err_t predo_post_handler(httpd_req_t *req){
     }else{
         memcpy(to_lcd, content, req->content_len - 4);
     }
-    ESP_LOGD(TAG, LOG_FMT("to_lcd: %s"), to_lcd);
+    ESP_LOGI(TAG, LOG_FMT("sending \"%s\" to lcd"), to_lcd);
     lcd_init();
+    lcd_put_cur(0, 0);
+    lcd_send_string("POST/predoServer");
+    lcd_put_cur(0, 1);
     lcd_send_string(to_lcd);
     free(to_lcd);
     free(content);
