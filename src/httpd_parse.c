@@ -309,7 +309,7 @@ static esp_err_t cb_headers_complete(http_parser *parser)
     r->content_len = ((int)parser->content_length != -1 ?
                       parser->content_length : 0);
 
-    ESP_LOGD(TAG, LOG_FMT("bytes read     = %u"),  parser->nread);
+    ESP_LOGD(TAG, LOG_FMT("bytes read     = %lu"),  parser->nread);
     ESP_LOGD(TAG, LOG_FMT("content length = %zu"), r->content_len);
 
     parser_data->status = PARSING_BODY;
