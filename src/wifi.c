@@ -20,7 +20,7 @@ wifi_config_t wifi_config = {
 void wifi_event_handler(void* s_wifi_event_group, esp_event_base_t event_base, int32_t event_id, void* event_data){
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
-        ESP_LOGI(TAG, "EVENT BASE: %s, EVENT ID: %d, EVENT BITS %d", event_base, event_id, xEventGroupGetBits(s_wifi_event_group));
+        ESP_LOGI(TAG, "EVENT BASE: %s, EVENT ID: %ld, EVENT BITS %ld", event_base, event_id, xEventGroupGetBits(s_wifi_event_group));
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (s_retry_num < MAXIMUM_RETRY) {
             esp_wifi_connect();
@@ -28,7 +28,7 @@ void wifi_event_handler(void* s_wifi_event_group, esp_event_base_t event_base, i
             ESP_LOGI(TAG, "retry to connect to the AP");
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-            ESP_LOGI(TAG, "EVENT BASE: %s, EVENT ID: %d, EVENT BITS %d", event_base, event_id, xEventGroupGetBits(s_wifi_event_group));
+            ESP_LOGI(TAG, "EVENT BASE: %s, EVENT ID: %ld, EVENT BITS %ld", event_base, event_id, xEventGroupGetBits(s_wifi_event_group));
         }
         ESP_LOGI(TAG,"connect to the AP fail");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -36,7 +36,7 @@ void wifi_event_handler(void* s_wifi_event_group, esp_event_base_t event_base, i
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-        ESP_LOGI(TAG, "EVENT BASE: %s, EVENT ID: %d, EVENT BITS %d", event_base, event_id, xEventGroupGetBits(s_wifi_event_group));
+        ESP_LOGI(TAG, "EVENT BASE: %s, EVENT ID: %ld, EVENT BITS %ld", event_base, event_id, xEventGroupGetBits(s_wifi_event_group));
     }
 }
 
